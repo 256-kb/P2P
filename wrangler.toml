@@ -1,0 +1,19 @@
+name = "snapdrop-p2p"
+main = "worker/worker.js"
+compatibility_date = "2024-04-01"
+
+# Durable Object bindings for WebSocket signaling
+[durable_objects]
+bindings = [
+  { name = "ROOM_DO", class_name = "SignalingRoom" }
+]
+
+# Durable Object migrations definition
+[[migrations]]
+tag = "v1"
+new_classes = ["SignalingRoom"]
+
+# Workers Static Assets (serves client/index.html directly at root URL)
+[assets]
+directory = "./client"
+binding = "ASSETS"

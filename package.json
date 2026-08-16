@@ -1,0 +1,16 @@
+{
+  "name": "snapdrop-p2p",
+  "version": "1.0.0",
+  "description": "P2P WebRTC file sharing web app powered by Cloudflare Workers and Durable Objects",
+  "main": "worker/worker.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": ["webrtc", "cloudflare-workers", "durable-objects", "snapdrop", "p2p", "file-sharing"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.50.0"
+  }
+}
