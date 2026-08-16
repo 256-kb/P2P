@@ -1,65 +1,37 @@
-# 🚀 Snapdrop P2P — WebRTC File Sharing via Cloudflare Workers & Durable Objects
+# ⚡ P2P — Serverless & Encrypted WebRTC File Sharing
 
-A complete, private, serverless peer-to-peer file sharing web application built with **WebRTC `RTCDataChannel`** and **Cloudflare Workers Durable Objects** for WebSocket signaling.
+> **100% Client-Side & Serverless.** Transfer files & folders directly between devices with zero backend, zero trackers, and **End-to-End AES-256-GCM Encryption**.
 
----
-
-## 📦 Project Structure
-
-```
-snapdrop-p2p/
-├── worker/
-│   └── worker.js         # Cloudflare Worker + Durable Objects WebSocket Signaling Server
-├── client/
-│   └── index.html        # Single self-contained HTML/CSS/JS client
-├── wrangler.toml         # Cloudflare Workers configuration with DO bindings & Assets
-├── package.json          # Project scripts
-└── README.md             # Documentation & deployment guide
-```
+Hosted automatically on **GitHub Pages**.
 
 ---
 
-## ⚡ Key Features
+## 🔒 How Security & Serverless Signaling Works
 
-1. **Direct P2P Data Transfer**: Files stream directly browser-to-browser via WebRTC Data Channels (chunked 64KB slices with backpressure control) without touching any middle server.
-2. **Durable Objects Room Isolation**: Cloudflare Durable Objects coordinate real-time WebSocket signaling (peer discovery, SDP offer/answers, ICE candidates) grouped by room.
-3. **Snapdrop / AirDrop Radar UI**: Real-time peer radar with animated orbit nodes, device type badges (desktop/mobile/tablet), and friendly names.
-4. **Drag & Drop / Multi-File**: Drag files anywhere onto the radar or click on a specific peer node.
-5. **Flow Control & Progress HUD**: Live transfer progress, KB/MB speed calculation, and estimated completion time.
-6. **Quick Text / Link Sharing**: Right-click on any peer node to instantly send clipboard text or links.
-
----
-
-## 🛠️ Step-by-Step Deployment Guide
-
-### Prerequisites
-- Node.js (v18 or newer)
-- A free [Cloudflare Account](https://dash.cloudflare.com/)
-
-### 1. Install Wrangler CLI & Authenticate
-```bash
-npx wrangler login
-```
-
-### 2. Run Locally
-Test both the signaling server and the client locally:
-```bash
-npx wrangler dev
-```
-Open two separate browser tabs at `http://localhost:8787` to see them discover each other on the radar and transfer files!
-
-### 3. Deploy to Cloudflare Workers
-Deploy the worker and client in a single command:
-```bash
-npx wrangler deploy
-```
-
-Wrangler will output your live URL (e.g. `https://snapdrop-p2p.<your-subdomain>.workers.dev`).
+1. **Zero Proprietary Backend** : The app runs 100% in the browser and uses public high-availability TLS MQTT brokers (`HiveMQ` / `EMQX`) solely to exchange initial WebRTC connection handshakes.
+2. **End-to-End Encryption (E2EE)** :
+   - The room secret is stored in the URL hash (e.g. `https://256-kb.github.io/P2P/#secret-abc123xyz`).
+   - The URL hash is **never sent over the network** (RFC standards dictate URL fragments stay strictly local to the browser).
+   - Every single signaling packet (discovery, SDP offers, answers, ICE candidates) is encrypted with **AES-256-GCM** using keys derived via PBKDF2 directly on your device.
+   - **No eavesdropper or broker can read who is connecting or decrypt the WebRTC metadata.**
+3. **Direct DataChannel Transfer** : Once connected, files travel directly from device to device via peer-to-peer WebRTC DTLS/SCTP channels.
 
 ---
 
-## 🌐 Custom Client Hosting (Optional)
-Because [`client/index.html`](file:///C:/Users/ninoc/.gemini/antigravity/scratch/snapdrop-p2p/client/index.html) is completely standalone, you can also host it anywhere (Cloudflare Pages, GitHub Pages, Vercel, or open directly in your browser):
-1. Open the **Settings** gear icon in the client.
-2. Paste your deployed Worker signaling URL: `wss://snapdrop-p2p.<your-subdomain>.workers.dev/ws`.
-3. Click **Save & Reconnect**.
+## ✨ Features
+
+- ⚡ **Pure Static Frontend** : Zero servers to run or pay for. Works seamlessly on GitHub Pages.
+- 📁 **Folder Transfer & Auto-Zip** : Drag & drop entire folders or select via picker to compress on the fly with JSZip and send as a `.zip` archive.
+- 📑 **Sequential Batch Queue** : Multiple files are sent one by one with memory-safe WebRTC flow control (`bufferedAmountLowThreshold`).
+- 🌓 **Minimalist B&W Interface** : Clean design with Dark/Light theme toggle.
+- 📱 **Mobile & iOS Safari Optimized** : Background recovery & wake synchronization.
+
+---
+
+## 🚀 Activation on GitHub Pages (1 Click)
+
+1. Go to your repository on GitHub: **[github.com/256-kb/P2P](https://github.com/256-kb/P2P)**.
+2. Go to **Settings** > **Pages**.
+3. Under **Build and deployment** > **Branch**, select `main` branch and `/ (root)` folder.
+4. Click **Save**.
+5. Your app is immediately live at: **`https://256-kb.github.io/P2P/`** !

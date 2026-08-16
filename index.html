@@ -9,17 +9,18 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
 
-  <title>P2P — Direct File &amp; Folder Transfer</title>
-  <meta name="description" content="Private, fast, peer-to-peer file and folder sharing directly between devices over WebRTC." />
+  <title>P2P — Serverless &amp; Encrypted File Transfer</title>
+  <meta name="description" content="Private, fast, peer-to-peer file and folder sharing directly between devices over WebRTC with End-to-End Encryption." />
   
   <!-- Monochrome Minimalist Favicon -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='11' fill='black'/><path d='M12 7v10' stroke='white'/><path d='m8 11 4-4 4 4' stroke='white'/></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-  <!-- JSZip Library for on-the-fly folder compression -->
+  <!-- JSZip (Folder compression) & Paho MQTT (Serverless Public Signaling) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
 
   <style>
     /* Theme Variables: Dark (Default) */
@@ -150,7 +151,7 @@
       background: var(--surface-hover);
     }
 
-    /* Room LED: White (Disconnected/Reconnecting), Green (Connected) */
+    /* Room LED: White (Connecting/Offline), Green (Connected & Encrypted) */
     .status-dot {
       width: 7px;
       height: 7px;
@@ -581,10 +582,11 @@
     </div>
 
     <div class="nav-actions">
-      <!-- Room Pill with LED -->
-      <div class="pill-badge" id="roomBtn" title="Change or share Room">
+      <!-- Room Pill with LED & E2EE Lock Icon -->
+      <div class="pill-badge" id="roomBtn" title="Change or share Encrypted Room">
         <div class="status-dot" id="statusDot"></div>
-        <span id="roomLabel">Room: General</span>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span id="roomLabel">Room: #...</span>
       </div>
 
       <!-- Theme Switch -->
@@ -603,7 +605,7 @@
       </button>
 
       <!-- Settings Button -->
-      <button class="icon-btn" id="settingsBtn" title="Settings">
+      <button class="icon-btn" id="settingsBtn" title="Settings &amp; Encryption Key">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       </button>
     </div>
@@ -630,7 +632,7 @@
     <div class="peers-layer" id="peersLayer"></div>
 
     <div class="empty-state" id="emptyState">
-      <div>Open P2P on other devices to discover them</div>
+      <div>Share your secret room link with other devices</div>
     </div>
 
     <!-- Drag & Drop Overlay -->
@@ -677,7 +679,7 @@
   <div class="modal-backdrop" id="settingsModal">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 class="modal-title">Settings</h3>
+        <h3 class="modal-title">Settings &amp; E2EE Key</h3>
         <button class="icon-btn" id="closeSettingsModal">&times;</button>
       </div>
       <div class="form-group">
@@ -685,16 +687,15 @@
         <input type="text" id="inputDeviceName" class="text-input" />
       </div>
       <div class="form-group">
-        <label class="form-label">Room Identifier</label>
-        <input type="text" id="inputRoomId" class="text-input" />
+        <label class="form-label">Secret Room Key (in URL hash)</label>
+        <input type="text" id="inputRoomKey" class="text-input" placeholder="e.g. secret-xyz" />
       </div>
-      <div class="form-group">
-        <label class="form-label">Signaling Server URL</label>
-        <input type="text" id="inputWsServer" class="text-input" />
+      <div style="font-size:0.72rem; color:var(--text-faint); line-height:1.3;">
+        🔒 All peer discovery and signaling packets are AES-256-GCM encrypted using this key. Only devices sharing this exact key can discover each other.
       </div>
       <div class="btn-group">
         <button class="btn btn-ghost" id="copyShareLinkBtn">Copy Link</button>
-        <button class="btn btn-primary" id="saveSettingsBtn">Save &amp; Reconnect</button>
+        <button class="btn btn-primary" id="saveSettingsBtn">Save &amp; Switch</button>
       </div>
     </div>
   </div>
@@ -722,14 +723,22 @@
       const CHUNK_SIZE = 64 * 1024;
       const BUFFER_HIGH = 1024 * 1024;
       const BUFFER_LOW = 256 * 1024;
-      const HEARTBEAT_INTERVAL_MS = 10000;
-      const HEARTBEAT_TIMEOUT_MS = 25000;
+      const HEARTBEAT_INTERVAL_MS = 6000;
+      const PEER_STALE_TIMEOUT_MS = 18000;
+
+      // Public Global High-Availability Brokers (HiveMQ & EMQX)
+      const PUBLIC_BROKERS = [
+        { host: 'broker.hivemq.com', port: 8884, path: '/mqtt', ssl: true },
+        { host: 'broker.emqx.io', port: 8084, path: '/mqtt', ssl: true }
+      ];
+      let currentBrokerIndex = 0;
 
       const STUN_SERVERS = {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
+          { urls: 'stun:stun2.l.google.com:19302' },
+          { urls: 'stun:global.stun.twilio.com:3478' }
         ],
         iceCandidatePoolSize: 10
       };
@@ -744,31 +753,42 @@
         return `${adj} ${a} ${num}`;
       }
 
-      // Tab session isolation
+      function generateSecretKey() {
+        const rand = crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+        return `p2p-${rand}`;
+      }
+
+      // --- URL Hash Secret & E2EE Key Derivation ---
+      let roomSecret = (window.location.hash || '').replace(/^#/, '').trim();
+      if (!roomSecret) {
+        roomSecret = generateSecretKey();
+        window.location.hash = roomSecret;
+      }
+
+      let cryptoAesKey = null;
+      let mqttTopic = '';
+
       let selfPeerId = sessionStorage.getItem('snapdrop_peer_id') || crypto.randomUUID();
       sessionStorage.setItem('snapdrop_peer_id', selfPeerId);
 
       let selfName = sessionStorage.getItem('snapdrop_device_name') || generateRandomName();
       sessionStorage.setItem('snapdrop_device_name', selfName);
 
-      let roomId = new URLSearchParams(window.location.search).get('room') || window.location.hash.replace('#', '') || 'general';
-      let wsServerUrl = localStorage.getItem('snapdrop_ws_server') || (window.location.protocol === 'https:' ? `wss://${window.location.host}/ws` : `ws://${window.location.host}/ws`);
-
       let currentTheme = localStorage.getItem('snapdrop_theme') || 'dark';
 
-      let ws = null;
+      let mqttClient = null;
       let heartbeatTimer = null;
-      let lastServerMessageTime = Date.now();
-      const peers = new Map();
+      let stalePeerTimer = null;
+      const peers = new Map(); // peerId -> peerState
 
-      // Sequential Transfer Queue state
-      const sendQueue = []; // array of { peerId, file, totalInBatch, indexInBatch }
+      // Queue state
+      const sendQueue = [];
       let isSendingActive = false;
       let selectedTargetPeer = null;
 
       // Receiver state
       let pendingIncomingTransfer = null;
-      let autoAcceptBatchFromPeer = null; // PeerId from whom batch files are auto-accepted after 1st accept
+      let autoAcceptBatchFromPeer = null;
 
       const selfDevice = {
         os: /iPhone|iPad|Android/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop',
@@ -802,277 +822,248 @@
       const actionPickFolderBtn = document.getElementById('actionPickFolderBtn');
       const closePeerActionModal = document.getElementById('closePeerActionModal');
 
-      function init() {
+      async function init() {
         applyTheme(currentTheme);
         selfDisplayName.textContent = selfName;
         selfDeviceDetails.textContent = selfDevice.os;
-        roomLabel.textContent = `Room: #${roomId}`;
+        roomLabel.textContent = `Key: #${roomSecret.slice(0, 10)}`;
         updateIcon(selfDeviceIcon, selfDevice.type);
 
-        initWebSocket();
+        await setupCryptography();
+        initMqttSignaling();
         setupDragAndDrop();
         setupModals();
         setupThemeToggle();
         setupLifecycleListeners();
       }
 
-      function setupThemeToggle() {
-        themeToggleBtn.addEventListener('click', () => {
-          currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-          applyTheme(currentTheme);
-          localStorage.setItem('snapdrop_theme', currentTheme);
-        });
+      // --- Cryptography: AES-256-GCM + PBKDF2 ---
+      async function setupCryptography() {
+        const enc = new TextEncoder();
+        
+        // 1. Derive deterministic topic hash from secret
+        const topicBuffer = await crypto.subtle.digest('SHA-256', enc.encode('p2p-topic-salt-2026:' + roomSecret));
+        const topicHex = Array.from(new Uint8Array(topicBuffer)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 24);
+        mqttTopic = `p2p/room/${topicHex}`;
+
+        // 2. Derive AES-GCM-256 Key
+        const keyMaterial = await crypto.subtle.importKey(
+          'raw',
+          enc.encode(roomSecret),
+          { name: 'PBKDF2' },
+          false,
+          ['deriveKey']
+        );
+
+        cryptoAesKey = await crypto.subtle.deriveKey(
+          {
+            name: 'PBKDF2',
+            salt: enc.encode('p2p-aes-salt-2026'),
+            iterations: 100000,
+            hash: 'SHA-256'
+          },
+          keyMaterial,
+          { name: 'AES-GCM', length: 256 },
+          false,
+          ['encrypt', 'decrypt']
+        );
       }
 
-      function applyTheme(theme) {
-        document.documentElement.setAttribute('data-theme', theme);
-        if (theme === 'light') {
-          themeIcon.innerHTML = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>`;
-        } else {
-          themeIcon.innerHTML = `
-            <circle cx="12" cy="12" r="5"></circle>
-            <line x1="12" y1="1" x2="12" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="23"></line>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-            <line x1="1" y1="12" x2="3" y2="12"></line>
-            <line x1="21" y1="12" x2="23" y2="12"></line>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-          `;
+      async function encryptPacket(plainObj) {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encoded = new TextEncoder().encode(JSON.stringify(plainObj));
+        const ciphertext = await crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv: iv },
+          cryptoAesKey,
+          encoded
+        );
+        const combined = new Uint8Array(iv.byteLength + ciphertext.byteLength);
+        combined.set(iv, 0);
+        combined.set(new Uint8Array(ciphertext), iv.byteLength);
+        return btoa(String.fromCharCode.apply(null, combined));
+      }
+
+      async function decryptPacket(base64Str) {
+        try {
+          const raw = atob(base64Str);
+          const bytes = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+          const iv = bytes.slice(0, 12);
+          const data = bytes.slice(12);
+          const decrypted = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: iv },
+            cryptoAesKey,
+            data
+          );
+          return JSON.parse(new TextDecoder().decode(decrypted));
+        } catch(e) {
+          // Packet from different key or corrupt
+          return null;
         }
       }
 
-      function updateIcon(svg, type) {
-        if (type === 'mobile') {
-          svg.innerHTML = `<rect x="5" y="2" width="14" height="20" rx="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line>`;
-        } else if (type === 'tablet') {
-          svg.innerHTML = `<rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line>`;
-        } else {
-          svg.innerHTML = `<rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line>`;
-        }
-      }
-
-      function cleanupPeer(peer) {
-        if (!peer) return;
-        if (peer.dataChannel) {
-          try { peer.dataChannel.close(); } catch(e) {}
-          peer.dataChannel = null;
-        }
-        if (peer.pc) {
-          try { peer.pc.close(); } catch(e) {}
-          peer.pc = null;
-        }
-        peer.iceQueue = [];
-        peer.sendQueue = [];
-        if (peer.dcResolvers) {
-          peer.dcResolvers.forEach(r => r.reject(new Error('Peer connection closed')));
-          peer.dcResolvers = [];
-        }
-      }
-
-      function cleanupAllConnections() {
-        for (const [_, p] of peers) {
-          cleanupPeer(p);
-        }
-        peers.clear();
-        renderPeers();
-      }
-
-      // --- Mobile Lifecycle & Wake Handlers ---
-      function setupLifecycleListeners() {
-        document.addEventListener('visibilitychange', () => {
-          if (document.visibilityState === 'visible') {
-            checkAndSyncConnection();
-          }
-        });
-
-        window.addEventListener('online', () => {
-          checkAndSyncConnection();
-        });
-
-        window.addEventListener('focus', () => {
-          checkAndSyncConnection();
-        });
-      }
-
-      function checkAndSyncConnection() {
-        if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
-          initWebSocket();
-        } else if (ws.readyState === WebSocket.OPEN) {
-          lastServerMessageTime = Date.now();
-          ws.send(JSON.stringify({ type: 'sync' }));
-        }
-      }
-
-      // --- WebSocket Signaling with Heartbeat ---
-      function initWebSocket() {
-        if (ws) {
-          try { ws.onclose = null; ws.close(); } catch(e) {}
+      // --- Serverless MQTT Public Signaling ---
+      function initMqttSignaling() {
+        if (mqttClient) {
+          try { mqttClient.disconnect(); } catch(e) {}
         }
         clearInterval(heartbeatTimer);
+        clearInterval(stalePeerTimer);
         cleanupAllConnections();
-
-        const url = new URL(wsServerUrl, window.location.href);
-        url.searchParams.set('room', roomId);
 
         statusDot.className = 'status-dot';
         selfDeviceDetails.textContent = 'Connecting...';
-        lastServerMessageTime = Date.now();
 
-        try {
-          ws = new WebSocket(url.toString());
-        } catch(e) {
-          showToast("Failed to connect to signaling server.");
-          return;
-        }
+        const broker = PUBLIC_BROKERS[currentBrokerIndex % PUBLIC_BROKERS.length];
+        const clientId = `p2p_${selfPeerId.slice(0, 8)}_${Math.floor(Math.random() * 10000)}`;
 
-        ws.onopen = () => {
-          statusDot.className = 'status-dot connected';
-          selfDeviceDetails.textContent = 'Online';
-          lastServerMessageTime = Date.now();
-          showToast(`Connected to room #${roomId}`);
+        mqttClient = new Paho.MQTT.Client(broker.host, broker.port, broker.path, clientId);
 
-          ws.send(JSON.stringify({
-            type: 'join',
-            peerId: selfPeerId,
-            name: selfName,
-            device: selfDevice
-          }));
-
-          heartbeatTimer = setInterval(() => {
-            if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
-            if (Date.now() - lastServerMessageTime > HEARTBEAT_TIMEOUT_MS) {
-              try { ws.close(); } catch(e) {}
-              initWebSocket();
-              return;
-            }
-
-            ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
-          }, HEARTBEAT_INTERVAL_MS);
+        mqttClient.onConnectionLost = (responseObject) => {
+          statusDot.className = 'status-dot';
+          selfDeviceDetails.textContent = 'Reconnecting...';
+          console.warn('[MQTT] Connection lost:', responseObject.errorMessage);
+          currentBrokerIndex++;
+          setTimeout(initMqttSignaling, 2000);
         };
 
-        ws.onmessage = (e) => {
-          lastServerMessageTime = Date.now();
-          try {
-            const data = JSON.parse(e.data);
+        mqttClient.onMessageArrived = async (message) => {
+          const payloadEncrypted = message.payloadString;
+          const data = await decryptPacket(payloadEncrypted);
+          if (data && data.senderId !== selfPeerId) {
             handleSignalingMessage(data);
-          } catch(err) {
-            console.error("Signaling message error:", err);
           }
         };
 
-        ws.onclose = () => {
-          statusDot.className = 'status-dot';
-          selfDeviceDetails.textContent = 'Offline';
-          clearInterval(heartbeatTimer);
-          
-          setTimeout(() => {
-            if (ws && ws.readyState === WebSocket.CLOSED) {
-              initWebSocket();
-            }
-          }, 2500);
-        };
+        mqttClient.connect({
+          useSSL: broker.ssl,
+          timeout: 10,
+          keepAliveInterval: 30,
+          cleanSession: true,
+          onSuccess: () => {
+            statusDot.className = 'status-dot connected';
+            selfDeviceDetails.textContent = 'Encrypted & Online';
+            showToast(`Connected to secure room`);
+
+            mqttClient.subscribe(mqttTopic, { qos: 0 });
+
+            // Broadcast presence
+            broadcastSignaling({
+              type: 'presence',
+              senderId: selfPeerId,
+              name: selfName,
+              device: selfDevice,
+              timestamp: Date.now()
+            });
+
+            // Keepalive & Presence Broadcast
+            heartbeatTimer = setInterval(() => {
+              broadcastSignaling({
+                type: 'ping',
+                senderId: selfPeerId,
+                name: selfName,
+                device: selfDevice,
+                timestamp: Date.now()
+              });
+            }, HEARTBEAT_INTERVAL_MS);
+
+            // Stale Peer Purge Watchdog
+            stalePeerTimer = setInterval(() => {
+              const now = Date.now();
+              let changed = false;
+              for (const [id, p] of peers.entries()) {
+                if (now - p.lastSeen > PEER_STALE_TIMEOUT_MS) {
+                  cleanupPeer(p);
+                  peers.delete(id);
+                  changed = true;
+                  showToast(`${p.name} left`);
+                }
+              }
+              if (changed) renderPeers();
+            }, 5000);
+          },
+          onFailure: (err) => {
+            console.error('[MQTT] Connect failed on broker:', broker.host, err);
+            currentBrokerIndex++;
+            setTimeout(initMqttSignaling, 2500);
+          }
+        });
+      }
+
+      async function broadcastSignaling(payload) {
+        if (!mqttClient || !mqttClient.isConnected()) return;
+        try {
+          const encrypted = await encryptPacket(payload);
+          const message = new Paho.MQTT.Message(encrypted);
+          message.destinationName = mqttTopic;
+          message.qos = 0;
+          mqttClient.send(message);
+        } catch(e) {
+          console.error('[MQTT] Broadcast error:', e);
+        }
       }
 
       function handleSignalingMessage(data) {
-        switch (data.type) {
-          case 'pong':
-            lastServerMessageTime = Date.now();
-            break;
+        const { type, senderId } = data;
+        if (!senderId || senderId === selfPeerId) return;
 
-          case 'ping':
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
-            }
-            break;
-
-          case 'joined':
-          case 'sync-result': {
-            selfPeerId = data.peerId || selfPeerId;
-            sessionStorage.setItem('snapdrop_peer_id', selfPeerId);
-
-            if (data.assignedName && data.assignedName !== selfName) {
-              selfName = data.assignedName;
-              sessionStorage.setItem('snapdrop_device_name', selfName);
-              selfDisplayName.textContent = selfName;
-            }
-
-            const incomingIds = new Set((data.peers || []).map(p => p.peerId));
-            for (const [id, peer] of peers.entries()) {
-              if (!incomingIds.has(id)) {
-                cleanupPeer(peer);
-                peers.delete(id);
-              }
-            }
-
-            (data.peers || []).forEach(addOrUpdatePeer);
-            renderPeers();
-            break;
-          }
-
-          case 'peer-joined': {
-            if (data.peer && data.peer.peerId !== selfPeerId) {
-              addOrUpdatePeer(data.peer);
-              renderPeers();
-              showToast(`${data.peer.name} joined`);
-            }
-            break;
-          }
-
-          case 'peer-left': {
-            if (data.peerId) {
-              const p = peers.get(data.peerId);
-              if (p) {
-                cleanupPeer(p);
-                peers.delete(data.peerId);
-                renderPeers();
-                showToast(`${p.name} left`);
-              }
-            }
-            break;
-          }
-
-          case 'peer-updated': {
-            if (data.peer && data.peer.peerId !== selfPeerId) {
-              addOrUpdatePeer(data.peer);
-              renderPeers();
-            }
-            break;
-          }
-
-          case 'signal': {
-            if (data.sender && data.signal) {
-              handlePeerSignal(data.sender, data.signal);
-            }
-            break;
-          }
-        }
-      }
-
-      function addOrUpdatePeer(peerData) {
-        if (!peerData || peerData.peerId === selfPeerId) return;
-
-        let existing = peers.get(peerData.peerId);
-        if (existing) {
-          existing.name = peerData.name || existing.name;
-          existing.device = peerData.device || existing.device;
-        } else {
-          peers.set(peerData.peerId, {
-            peerId: peerData.peerId,
-            name: peerData.name || 'Device',
-            device: peerData.device || { type: 'desktop', os: 'Unknown' },
+        let peer = peers.get(senderId);
+        if (!peer) {
+          peer = {
+            peerId: senderId,
+            name: data.name || 'Peer Device',
+            device: data.device || { type: 'desktop', os: 'Device' },
+            lastSeen: Date.now(),
             pc: null,
             dataChannel: null,
             iceQueue: [],
             dcResolvers: [],
             sendQueue: [],
             isMakingOffer: false
-          });
+          };
+          peers.set(senderId, peer);
+          renderPeers();
+          if (type === 'presence') {
+            showToast(`${peer.name} joined`);
+            // Reply with our presence so both discover each other instantly
+            broadcastSignaling({
+              type: 'pong',
+              senderId: selfPeerId,
+              targetId: senderId,
+              name: selfName,
+              device: selfDevice,
+              timestamp: Date.now()
+            });
+          }
+        }
+
+        peer.lastSeen = Date.now();
+        if (data.name) peer.name = data.name;
+        if (data.device) peer.device = data.device;
+
+        switch (type) {
+          case 'presence':
+          case 'ping':
+          case 'pong':
+            // Presence acknowledged
+            break;
+
+          case 'leave':
+            cleanupPeer(peer);
+            peers.delete(senderId);
+            renderPeers();
+            showToast(`${peer.name} left`);
+            break;
+
+          case 'signal':
+            if (data.targetId === selfPeerId && data.signal) {
+              handlePeerSignal(senderId, data.signal);
+            }
+            break;
         }
       }
 
+      // --- Dynamic Orbital UI Render ---
       function renderPeers() {
         peersLayer.innerHTML = '';
         const list = Array.from(peers.values());
@@ -1110,7 +1101,7 @@
         });
       }
 
-      // --- WebRTC State Machine ---
+      // --- WebRTC State Machine with E2EE DataChannel ---
       function getOrCreatePC(peerId) {
         let peer = peers.get(peerId);
         if (!peer) return null;
@@ -1126,12 +1117,13 @@
         peer.iceQueue = [];
 
         pc.onicecandidate = (e) => {
-          if (e.candidate && ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
+          if (e.candidate) {
+            broadcastSignaling({
               type: 'signal',
-              target: peerId,
+              senderId: selfPeerId,
+              targetId: peerId,
               signal: { type: 'candidate', candidate: e.candidate }
-            }));
+            });
           }
         };
 
@@ -1211,13 +1203,13 @@
               peer.isMakingOffer = true;
               const offer = await pc.createOffer();
               await pc.setLocalDescription(offer);
-              if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                  type: 'signal',
-                  target: peerId,
-                  signal: { type: 'offer', sdp: offer }
-                }));
-              }
+
+              broadcastSignaling({
+                type: 'signal',
+                senderId: selfPeerId,
+                targetId: peerId,
+                signal: { type: 'offer', sdp: offer }
+              });
             }
           } catch(err) {
             clearTimeout(timeout);
@@ -1255,13 +1247,12 @@
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
 
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({
-                type: 'signal',
-                target: senderId,
-                signal: { type: 'answer', sdp: answer }
-              }));
-            }
+            broadcastSignaling({
+              type: 'signal',
+              senderId: selfPeerId,
+              targetId: senderId,
+              signal: { type: 'answer', sdp: answer }
+            });
 
           } else if (signal.type === 'answer') {
             if (pc.signalingState === 'have-local-offer') {
@@ -1313,7 +1304,6 @@
           transferHud.classList.remove('show');
         } finally {
           isSendingActive = false;
-          // Small breath between files to allow receiver buffer to flush and download
           setTimeout(processSendQueue, 400);
         }
       }
@@ -1431,7 +1421,6 @@
 
               const countPrefix = msg.totalFiles > 1 ? `[${msg.fileIndex}/${msg.totalFiles}] ` : '';
 
-              // If receiver already accepted a batch from this peer, auto-accept subsequent files
               if (autoAcceptBatchFromPeer === peerId && msg.fileIndex > 1) {
                 const peer = peers.get(peerId);
                 if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
@@ -1466,7 +1455,7 @@
             showToast(`Received : ${meta.name}`);
 
             if (meta.fileIndex === meta.totalFiles) {
-              autoAcceptBatchFromPeer = null; // Batch complete
+              autoAcceptBatchFromPeer = null;
               setTimeout(() => transferHud.classList.remove('show'), 1200);
             }
 
@@ -1480,7 +1469,6 @@
       async function handleFolderSelection(fileList, targetPeerId) {
         if (!fileList || fileList.length === 0) return;
 
-        // Determine folder name from webkitRelativePath
         const firstPath = fileList[0].webkitRelativePath || '';
         const folderName = firstPath.split('/')[0] || 'Folder';
         const zipFileName = `${folderName}.zip`;
@@ -1489,10 +1477,6 @@
         updateHud('Compressing', zipFileName, 0, 0, 100, Date.now());
 
         try {
-          if (typeof JSZip === 'undefined') {
-            throw new Error('JSZip library is still loading. Please retry in a second.');
-          }
-
           const zip = new JSZip();
           for (let i = 0; i < fileList.length; i++) {
             const file = fileList[i];
@@ -1535,12 +1519,10 @@
           }
         }
 
-        // Process individual files
         if (filesToQueue.length > 0) {
           enqueueFilesToSend(targetPeerId, filesToQueue);
         }
 
-        // Process directories as Zips
         for (const dirEntry of folderEntries) {
           const zip = new JSZip();
           const zipFileName = `${dirEntry.name}.zip`;
@@ -1574,7 +1556,6 @@
         }
       }
 
-      // --- Drag & Drop ---
       function setupDragAndDrop() {
         window.ondragenter = (e) => { e.preventDefault(); dropOverlay.classList.add('active'); };
         window.ondragleave = (e) => { if (e.clientX <= 0 || e.clientY <= 0) dropOverlay.classList.remove('active'); };
@@ -1623,8 +1604,39 @@
         }
       }
 
+      function setupLifecycleListeners() {
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            if (!mqttClient || !mqttClient.isConnected()) {
+              initMqttSignaling();
+            } else {
+              broadcastSignaling({
+                type: 'presence',
+                senderId: selfPeerId,
+                name: selfName,
+                device: selfDevice,
+                timestamp: Date.now()
+              });
+            }
+          }
+        });
+
+        window.addEventListener('online', () => {
+          initMqttSignaling();
+        });
+
+        window.addEventListener('hashchange', async () => {
+          const newSecret = (window.location.hash || '').replace(/^#/, '').trim();
+          if (newSecret && newSecret !== roomSecret) {
+            roomSecret = newSecret;
+            roomLabel.textContent = `Key: #${roomSecret.slice(0, 10)}`;
+            await setupCryptography();
+            initMqttSignaling();
+          }
+        });
+      }
+
       function setupModals() {
-        // Peer Action Picker (Files vs Folder)
         actionPickFilesBtn.onclick = () => {
           peerActionModal.classList.remove('show');
           filePicker.click();
@@ -1642,26 +1654,23 @@
         document.getElementById('settingsBtn').onclick = () => openSettings();
         document.getElementById('closeSettingsModal').onclick = () => document.getElementById('settingsModal').classList.remove('show');
 
-        document.getElementById('saveSettingsBtn').onclick = () => {
+        document.getElementById('saveSettingsBtn').onclick = async () => {
           const rawName = document.getElementById('inputDeviceName').value.trim();
           selfName = rawName || selfName;
-          roomId = document.getElementById('inputRoomId').value.trim() || roomId;
-          wsServerUrl = document.getElementById('inputWsServer').value.trim() || wsServerUrl;
+          const rawKey = document.getElementById('inputRoomKey').value.trim() || roomSecret;
 
           sessionStorage.setItem('snapdrop_device_name', selfName);
-          localStorage.setItem('snapdrop_ws_server', wsServerUrl);
-          window.location.hash = roomId;
-
           selfDisplayName.textContent = selfName;
-          roomLabel.textContent = `Room: #${roomId}`;
           document.getElementById('settingsModal').classList.remove('show');
 
-          initWebSocket();
+          if (rawKey !== roomSecret) {
+            window.location.hash = rawKey;
+          }
         };
 
         document.getElementById('copyShareLinkBtn').onclick = () => {
-          navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}#${roomId}`);
-          showToast('Room link copied!');
+          navigator.clipboard.writeText(window.location.href);
+          showToast('Encrypted room link copied!');
         };
 
         // Incoming Prompt
@@ -1691,9 +1700,71 @@
 
       function openSettings() {
         document.getElementById('inputDeviceName').value = selfName;
-        document.getElementById('inputRoomId').value = roomId;
-        document.getElementById('inputWsServer').value = wsServerUrl;
+        document.getElementById('inputRoomKey').value = roomSecret;
         document.getElementById('settingsModal').classList.add('show');
+      }
+
+      function cleanupPeer(peer) {
+        if (!peer) return;
+        if (peer.dataChannel) {
+          try { peer.dataChannel.close(); } catch(e) {}
+          peer.dataChannel = null;
+        }
+        if (peer.pc) {
+          try { peer.pc.close(); } catch(e) {}
+          peer.pc = null;
+        }
+        peer.iceQueue = [];
+        peer.sendQueue = [];
+        if (peer.dcResolvers) {
+          peer.dcResolvers.forEach(r => r.reject(new Error('Peer closed')));
+          peer.dcResolvers = [];
+        }
+      }
+
+      function cleanupAllConnections() {
+        for (const [_, p] of peers) {
+          cleanupPeer(p);
+        }
+        peers.clear();
+        renderPeers();
+      }
+
+      function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        if (theme === 'light') {
+          themeIcon.innerHTML = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>`;
+        } else {
+          themeIcon.innerHTML = `
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          `;
+        }
+      }
+
+      function setupThemeToggle() {
+        themeToggleBtn.addEventListener('click', () => {
+          currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+          applyTheme(currentTheme);
+          localStorage.setItem('snapdrop_theme', currentTheme);
+        });
+      }
+
+      function updateIcon(svg, type) {
+        if (type === 'mobile') {
+          svg.innerHTML = `<rect x="5" y="2" width="14" height="20" rx="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line>`;
+        } else if (type === 'tablet') {
+          svg.innerHTML = `<rect x="4" y="2" width="16" height="20" rx="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line>`;
+        } else {
+          svg.innerHTML = `<rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line>`;
+        }
       }
 
       function showToast(msg) {
