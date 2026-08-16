@@ -429,6 +429,116 @@
       transition: width 0.1s linear;
     }
 
+    /* Minecraft-Style Minimalist Chat */
+    .chat-widget {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      width: 320px;
+      max-width: calc(100vw - 32px);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 45;
+      pointer-events: none;
+    }
+
+    .chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      max-height: 180px;
+      overflow-y: auto;
+      scrollbar-width: none;
+      pointer-events: all;
+    }
+
+    .chat-messages::-webkit-scrollbar {
+      display: none;
+    }
+
+    .chat-msg-line {
+      font-size: 0.8rem;
+      line-height: 1.35;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #f4f4f5;
+      backdrop-filter: blur(4px);
+      width: fit-content;
+      max-width: 100%;
+      word-break: break-word;
+      animation: chatFadeIn 0.15s ease-out;
+    }
+
+    @keyframes chatFadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    [data-theme="light"] .chat-msg-line {
+      background: rgba(24, 24, 27, 0.75);
+      color: #ffffff;
+    }
+
+    .chat-msg-author {
+      font-weight: 600;
+      color: #a1a1aa;
+      margin-right: 5px;
+    }
+
+    .chat-msg-line.self .chat-msg-author {
+      color: #38bdf8;
+    }
+
+    .chat-input-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 2px 6px;
+      pointer-events: all;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .chat-input-bar:focus-within {
+      border-color: var(--text-faint);
+    }
+
+    .chat-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.8rem;
+      padding: 5px 6px;
+    }
+
+    .chat-input::placeholder {
+      color: var(--text-faint);
+    }
+
+    .chat-send-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s ease;
+    }
+
+    .chat-send-btn:hover {
+      color: var(--text);
+    }
+
     /* Modals */
     .modal-backdrop {
       position: fixed;
@@ -641,6 +751,20 @@
     </div>
   </main>
 
+  <!-- Minecraft-Style Room Text Chat -->
+  <div class="chat-widget" id="chatWidget">
+    <div class="chat-messages" id="chatMessages"></div>
+    <form class="chat-input-bar" id="chatForm">
+      <input type="text" id="chatInput" class="chat-input" placeholder="Type a message... (Press Enter)" autocomplete="off" maxlength="500" />
+      <button type="submit" class="chat-send-btn" title="Send">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </form>
+  </div>
+
   <!-- Live Transfer Progress HUD -->
   <div class="transfer-bar-container" id="transferHud">
     <div class="transfer-info-row">
@@ -807,6 +931,10 @@
       const hudEta = document.getElementById('hudEta');
       const themeToggleBtn = document.getElementById('themeToggleBtn');
       const themeIcon = document.getElementById('themeIcon');
+      const chatWidget = document.getElementById('chatWidget');
+      const chatMessages = document.getElementById('chatMessages');
+      const chatForm = document.getElementById('chatForm');
+      const chatInput = document.getElementById('chatInput');
 
       // Modals
       const peerActionModal = document.getElementById('peerActionModal');
@@ -828,6 +956,7 @@
         initPeerJS();
         setupDragAndDrop();
         setupModals();
+        setupChat();
         setupThemeToggle();
         setupLifecycleListeners();
       }
@@ -1149,6 +1278,13 @@
               peer.lastSeen = Date.now();
               if (msg.name) peer.name = msg.name;
               if (msg.device) peer.device = msg.device;
+            }
+            break;
+          }
+
+          case 'chat': {
+            if (msg.text) {
+              appendChatMessage(msg.name || peer?.name || 'Peer', msg.text, false);
             }
             break;
           }
@@ -1614,6 +1750,61 @@
           }
           pendingIncomingTransfer = null;
         };
+      }
+
+      function setupChat() {
+        chatForm.onsubmit = (e) => {
+          e.preventDefault();
+          const text = chatInput.value.trim();
+          if (!text) return;
+          chatInput.value = '';
+          sendChatMessage(text);
+        };
+
+        // Pressing Enter when no modal or input is focused will focus chat (Minecraft-style)
+        window.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && document.activeElement !== chatInput) {
+            if (!document.querySelector('.modal-backdrop.show')) {
+              e.preventDefault();
+              chatInput.focus();
+            }
+          }
+        });
+      }
+
+      function appendChatMessage(author, text, isSelf = false) {
+        const line = document.createElement('div');
+        line.className = `chat-msg-line ${isSelf ? 'self' : ''}`;
+
+        const authorSpan = document.createElement('span');
+        authorSpan.className = 'chat-msg-author';
+        authorSpan.textContent = `<${author}>`;
+
+        const textSpan = document.createElement('span');
+        textSpan.textContent = text;
+
+        line.appendChild(authorSpan);
+        line.appendChild(textSpan);
+        chatMessages.appendChild(line);
+
+        while (chatMessages.children.length > 40) {
+          chatMessages.removeChild(chatMessages.firstChild);
+        }
+
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      function sendChatMessage(text) {
+        const payload = {
+          type: 'chat',
+          senderId: selfPeerId,
+          name: selfName,
+          text: text,
+          timestamp: Date.now()
+        };
+
+        broadcastControlMessage(payload);
+        appendChatMessage('You', text, true);
       }
 
       function openSettings() {
