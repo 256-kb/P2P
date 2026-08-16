@@ -3,14 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>P2P — Direct File Transfer</title>
-  <meta name="description" content="Private, fast, peer-to-peer file sharing directly between devices over WebRTC." />
+  
+  <!-- Strict Anti-Cache Headers for iOS Safari & Mobile Browsers -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
+  <title>P2P — Direct File &amp; Folder Transfer</title>
+  <meta name="description" content="Private, fast, peer-to-peer file and folder sharing directly between devices over WebRTC." />
   
   <!-- Monochrome Minimalist Favicon -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='11' fill='black'/><path d='M12 7v10' stroke='white'/><path d='m8 11 4-4 4 4' stroke='white'/></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- JSZip Library for on-the-fly folder compression -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
   <style>
     /* Theme Variables: Dark (Default) */
@@ -506,6 +515,9 @@
       border: 1px solid transparent;
       font-family: inherit;
       transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .btn-ghost {
@@ -623,7 +635,7 @@
 
     <!-- Drag & Drop Overlay -->
     <div class="drop-overlay" id="dropOverlay">
-      <div style="font-size: 0.95rem; font-weight: 500;">Drop files here to send</div>
+      <div style="font-size: 0.95rem; font-weight: 500;">Drop files or folders here to send</div>
     </div>
   </main>
 
@@ -639,6 +651,25 @@
     <div class="transfer-info-row" style="color:var(--text-faint); font-size:0.75rem;">
       <span id="hudSpeed">0 KB/s</span>
       <span id="hudEta">...</span>
+    </div>
+  </div>
+
+  <!-- Peer Action Modal (Send Files or Folder) -->
+  <div class="modal-backdrop" id="peerActionModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title" id="peerActionTitle">Send to Device</h3>
+        <button class="icon-btn" id="closePeerActionModal">&times;</button>
+      </div>
+      <p style="font-size:0.85rem; color:var(--text-muted);">Choose what you want to send:</p>
+      <div class="btn-group" style="justify-content:stretch; gap:10px; margin-top:8px;">
+        <button class="btn btn-ghost" id="actionPickFolderBtn" style="flex:1; justify-content:center;">
+          📁 Send Folder (.zip)
+        </button>
+        <button class="btn btn-primary" id="actionPickFilesBtn" style="flex:1; justify-content:center;">
+          📄 Send Files
+        </button>
+      </div>
     </div>
   </div>
 
@@ -680,7 +711,10 @@
     </div>
   </div>
 
+  <!-- Hidden Inputs: Files & Folders -->
   <input type="file" id="filePicker" class="hidden-file-input" multiple />
+  <input type="file" id="folderPicker" class="hidden-file-input" webkitdirectory directory multiple />
+
   <div class="toast-container" id="toastContainer"></div>
 
   <script>
@@ -688,8 +722,8 @@
       const CHUNK_SIZE = 64 * 1024;
       const BUFFER_HIGH = 1024 * 1024;
       const BUFFER_LOW = 256 * 1024;
-      const HEARTBEAT_INTERVAL_MS = 10000; // Send ping every 10s
-      const HEARTBEAT_TIMEOUT_MS = 25000;  // Force reconnect if no server activity for 25s
+      const HEARTBEAT_INTERVAL_MS = 10000;
+      const HEARTBEAT_TIMEOUT_MS = 25000;
 
       const STUN_SERVERS = {
         iceServers: [
@@ -725,10 +759,16 @@
       let ws = null;
       let heartbeatTimer = null;
       let lastServerMessageTime = Date.now();
-      const peers = new Map(); // peerId -> peer state
-      let targetPeerForUpload = null;
-      const activeTransfers = new Map();
+      const peers = new Map();
+
+      // Sequential Transfer Queue state
+      const sendQueue = []; // array of { peerId, file, totalInBatch, indexInBatch }
+      let isSendingActive = false;
+      let selectedTargetPeer = null;
+
+      // Receiver state
       let pendingIncomingTransfer = null;
+      let autoAcceptBatchFromPeer = null; // PeerId from whom batch files are auto-accepted after 1st accept
 
       const selfDevice = {
         os: /iPhone|iPad|Android/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop',
@@ -744,6 +784,7 @@
       const peersLayer = document.getElementById('peersLayer');
       const emptyState = document.getElementById('emptyState');
       const filePicker = document.getElementById('filePicker');
+      const folderPicker = document.getElementById('folderPicker');
       const dropOverlay = document.getElementById('dropOverlay');
       const transferHud = document.getElementById('transferHud');
       const hudFilename = document.getElementById('hudFilename');
@@ -753,6 +794,13 @@
       const hudEta = document.getElementById('hudEta');
       const themeToggleBtn = document.getElementById('themeToggleBtn');
       const themeIcon = document.getElementById('themeIcon');
+
+      // Modals
+      const peerActionModal = document.getElementById('peerActionModal');
+      const peerActionTitle = document.getElementById('peerActionTitle');
+      const actionPickFilesBtn = document.getElementById('actionPickFilesBtn');
+      const actionPickFolderBtn = document.getElementById('actionPickFolderBtn');
+      const closePeerActionModal = document.getElementById('closePeerActionModal');
 
       function init() {
         applyTheme(currentTheme);
@@ -831,19 +879,15 @@
         renderPeers();
       }
 
-      // --- Mobile / Tab Lifecycle & Aggressive Reconnection ---
+      // --- Mobile Lifecycle & Wake Handlers ---
       function setupLifecycleListeners() {
-        // App resumed from background (e.g. mobile unlock or tab switch)
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') {
-            console.log('[Lifecycle] App resumed to foreground. Checking sync...');
             checkAndSyncConnection();
           }
         });
 
-        // Network reconnected (e.g. Wi-Fi toggle)
         window.addEventListener('online', () => {
-          console.log('[Lifecycle] Network came online.');
           checkAndSyncConnection();
         });
 
@@ -856,13 +900,12 @@
         if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
           initWebSocket();
         } else if (ws.readyState === WebSocket.OPEN) {
-          // Send instant sync request to ensure peer list is fresh
           lastServerMessageTime = Date.now();
           ws.send(JSON.stringify({ type: 'sync' }));
         }
       }
 
-      // --- WebSocket Signaling with Ping/Pong Heartbeat & Watchdog ---
+      // --- WebSocket Signaling with Heartbeat ---
       function initWebSocket() {
         if (ws) {
           try { ws.onclose = null; ws.close(); } catch(e) {}
@@ -890,7 +933,6 @@
           lastServerMessageTime = Date.now();
           showToast(`Connected to room #${roomId}`);
 
-          // Register with room
           ws.send(JSON.stringify({
             type: 'join',
             peerId: selfPeerId,
@@ -898,19 +940,15 @@
             device: selfDevice
           }));
 
-          // Heartbeat Ping & Stale Watchdog
           heartbeatTimer = setInterval(() => {
             if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
-            // Watchdog check: If no message or pong for > 25s, socket is silently dead (common on mobile background sleep)
             if (Date.now() - lastServerMessageTime > HEARTBEAT_TIMEOUT_MS) {
-              console.warn('[Heartbeat] Server unresponsive. Forcing reconnect...');
               try { ws.close(); } catch(e) {}
               initWebSocket();
               return;
             }
 
-            // Send ping
             ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
           }, HEARTBEAT_INTERVAL_MS);
         };
@@ -930,7 +968,6 @@
           selfDeviceDetails.textContent = 'Offline';
           clearInterval(heartbeatTimer);
           
-          // Reconnect with 2.5s backoff
           setTimeout(() => {
             if (ws && ws.readyState === WebSocket.CLOSED) {
               initWebSocket();
@@ -941,19 +978,15 @@
 
       function handleSignalingMessage(data) {
         switch (data.type) {
-          case 'pong': {
-            // Heartbeat acknowledged
+          case 'pong':
             lastServerMessageTime = Date.now();
             break;
-          }
 
-          case 'ping': {
-            // Server-initiated ping -> reply immediately with pong
+          case 'ping':
             if (ws && ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
             }
             break;
-          }
 
           case 'joined':
           case 'sync-result': {
@@ -966,10 +999,7 @@
               selfDisplayName.textContent = selfName;
             }
 
-            // Sync peer list
             const incomingIds = new Set((data.peers || []).map(p => p.peerId));
-            
-            // Remove peers that have disconnected
             for (const [id, peer] of peers.entries()) {
               if (!incomingIds.has(id)) {
                 cleanupPeer(peer);
@@ -977,7 +1007,6 @@
               }
             }
 
-            // Add or update active peers
             (data.peers || []).forEach(addOrUpdatePeer);
             renderPeers();
             break;
@@ -1044,7 +1073,6 @@
         }
       }
 
-      // --- Dynamic Orbital UI Render ---
       function renderPeers() {
         peersLayer.innerHTML = '';
         const list = Array.from(peers.values());
@@ -1074,14 +1102,15 @@
           updateIcon(svg, peer.device.type);
 
           node.onclick = () => {
-            targetPeerForUpload = peer.peerId;
-            filePicker.click();
+            selectedTargetPeer = peer.peerId;
+            peerActionTitle.textContent = `Send to ${peer.name}`;
+            peerActionModal.classList.add('show');
           };
           peersLayer.appendChild(node);
         });
       }
 
-      // --- WebRTC State Machine & Negotiation ---
+      // --- WebRTC State Machine ---
       function getOrCreatePC(peerId) {
         let peer = peers.get(peerId);
         if (!peer) return null;
@@ -1107,7 +1136,6 @@
         };
 
         pc.ondatachannel = (e) => {
-          console.log(`[WebRTC] Received DataChannel from ${peer.name}`);
           setupDataChannel(peerId, e.channel);
         };
 
@@ -1129,8 +1157,6 @@
         dc.bufferedAmountLowThreshold = BUFFER_LOW;
 
         dc.onopen = () => {
-          console.log(`[WebRTC] DataChannel OPEN with ${peer.name}`);
-          
           if (peer.dcResolvers && peer.dcResolvers.length > 0) {
             peer.dcResolvers.forEach(r => r.resolve(dc));
             peer.dcResolvers = [];
@@ -1141,9 +1167,7 @@
               const msg = peer.sendQueue.shift();
               try {
                 dc.send(typeof msg === 'string' ? msg : JSON.stringify(msg));
-              } catch(e) {
-                console.error("Queue send error:", e);
-              }
+              } catch(e) {}
             }
           }
         };
@@ -1151,12 +1175,7 @@
         dc.onmessage = (e) => handleDataMessage(peerId, e.data);
 
         dc.onclose = () => {
-          console.log(`[WebRTC] DataChannel CLOSED with ${peer.name}`);
           peer.dataChannel = null;
-        };
-
-        dc.onerror = (err) => {
-          console.error(`[WebRTC] DataChannel ERROR with ${peer.name}:`, err);
         };
       }
 
@@ -1261,11 +1280,142 @@
             }
           }
         } catch(err) {
-          console.error(`[WebRTC] Signal handling error with ${senderId}:`, err);
+          console.error(`[WebRTC] Signal handling error:`, err);
         }
       }
 
-      // --- Transfer Protocol & Flow Control ---
+      // --- Robust Sequential Send Queue ---
+      function enqueueFilesToSend(peerId, filesList) {
+        const arr = Array.from(filesList);
+        const total = arr.length;
+        arr.forEach((file, index) => {
+          sendQueue.push({
+            peerId,
+            file,
+            index: index + 1,
+            total: total
+          });
+        });
+        processSendQueue();
+      }
+
+      async function processSendQueue() {
+        if (isSendingActive || sendQueue.length === 0) return;
+
+        isSendingActive = true;
+        const item = sendQueue.shift();
+
+        try {
+          await sendSingleFile(item.peerId, item.file, item.index, item.total);
+        } catch (err) {
+          console.error("File send error:", err);
+          showToast(`Error sending ${item.file.name}: ${err.message}`);
+          transferHud.classList.remove('show');
+        } finally {
+          isSendingActive = false;
+          // Small breath between files to allow receiver buffer to flush and download
+          setTimeout(processSendQueue, 400);
+        }
+      }
+
+      async function sendSingleFile(peerId, file, fileIndex = 1, totalFiles = 1) {
+        const peer = peers.get(peerId);
+        if (!peer) throw new Error('Peer is no longer connected');
+
+        const dc = await ensureDataChannelReady(peerId);
+        const transferId = crypto.randomUUID();
+
+        return new Promise((resolve, reject) => {
+          let hasAccepted = false;
+
+          const messageHandler = (e) => {
+            if (typeof e.data === 'string') {
+              try {
+                const msg = JSON.parse(e.data);
+                if (msg.transferId === transferId) {
+                  if (msg.type === 'accept') {
+                    hasAccepted = true;
+                    dc.removeEventListener('message', messageHandler);
+                    streamFileChunks(dc, file, transferId, fileIndex, totalFiles)
+                      .then(resolve)
+                      .catch(reject);
+                  } else if (msg.type === 'decline') {
+                    dc.removeEventListener('message', messageHandler);
+                    reject(new Error('Peer declined transfer'));
+                  }
+                }
+              } catch(err) {}
+            }
+          };
+
+          dc.addEventListener('message', messageHandler);
+
+          // Send Header
+          dc.send(JSON.stringify({
+            type: 'header',
+            transferId: transferId,
+            name: file.name,
+            size: file.size,
+            mimeType: file.type,
+            fileIndex: fileIndex,
+            totalFiles: totalFiles
+          }));
+
+          const countPrefix = totalFiles > 1 ? `(${fileIndex}/${totalFiles}) ` : '';
+          showToast(`Sending ${countPrefix}${file.name}...`);
+        });
+      }
+
+      function streamFileChunks(dc, file, transferId, fileIndex, totalFiles) {
+        return new Promise((resolve, reject) => {
+          let offset = 0;
+          const startTime = Date.now();
+          const countPrefix = totalFiles > 1 ? `(${fileIndex}/${totalFiles}) ` : '';
+
+          function sliceNext() {
+            if (dc.readyState !== 'open') {
+              return reject(new Error('DataChannel closed during transfer'));
+            }
+
+            const slice = file.slice(offset, offset + CHUNK_SIZE);
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+              if (dc.readyState !== 'open') return reject(new Error('DataChannel disconnected'));
+
+              dc.send(e.target.result);
+              offset += e.target.result.byteLength;
+
+              const percent = Math.min(100, Math.round((offset / file.size) * 100));
+              updateHud(`Sending ${countPrefix}`, file.name, percent, offset, file.size, startTime);
+
+              if (offset < file.size) {
+                if (dc.bufferedAmount > BUFFER_HIGH) {
+                  dc.onbufferedamountlow = () => {
+                    dc.onbufferedamountlow = null;
+                    sliceNext();
+                  };
+                } else {
+                  sliceNext();
+                }
+              } else {
+                showToast(`Sent : ${file.name}`);
+                setTimeout(() => {
+                  if (sendQueue.length === 0) transferHud.classList.remove('show');
+                }, 1000);
+                resolve();
+              }
+            };
+
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(slice);
+          }
+
+          sliceNext();
+        });
+      }
+
+      // --- Receiver Logic ---
       function handleDataMessage(peerId, data) {
         if (typeof data === 'string') {
           try {
@@ -1278,119 +1428,186 @@
                 receivedBytes: 0,
                 startTime: Date.now()
               };
-              document.getElementById('incomingDesc').innerHTML = `<strong>${escapeHtml(peers.get(peerId)?.name || 'A peer')}</strong> wants to send:<br/><strong>${escapeHtml(msg.name)}</strong> (${formatBytes(msg.size)})`;
+
+              const countPrefix = msg.totalFiles > 1 ? `[${msg.fileIndex}/${msg.totalFiles}] ` : '';
+
+              // If receiver already accepted a batch from this peer, auto-accept subsequent files
+              if (autoAcceptBatchFromPeer === peerId && msg.fileIndex > 1) {
+                const peer = peers.get(peerId);
+                if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
+                  peer.dataChannel.send(JSON.stringify({ type: 'accept', transferId: msg.transferId }));
+                }
+                return;
+              }
+
+              document.getElementById('incomingDesc').innerHTML = `<strong>${escapeHtml(peers.get(peerId)?.name || 'A peer')}</strong> wants to send:<br/><strong>${countPrefix}${escapeHtml(msg.name)}</strong> (${formatBytes(msg.size)})`;
               document.getElementById('incomingPromptModal').classList.add('show');
-            } else if (msg.type === 'accept') {
-              const transfer = activeTransfers.get(msg.transferId);
-              if (transfer) sendFileChunks(transfer);
-            } else if (msg.type === 'decline') {
-              showToast('Peer declined the file transfer.');
-              transferHud.classList.remove('show');
             }
           } catch(e) {}
         } else if (data instanceof ArrayBuffer && pendingIncomingTransfer) {
           pendingIncomingTransfer.chunks.push(data);
           pendingIncomingTransfer.receivedBytes += data.byteLength;
-          const percent = Math.min(100, Math.round((pendingIncomingTransfer.receivedBytes / pendingIncomingTransfer.meta.size) * 100));
-          updateHud('Receiving', pendingIncomingTransfer.meta.name, percent, pendingIncomingTransfer.receivedBytes, pendingIncomingTransfer.meta.size, pendingIncomingTransfer.startTime);
 
-          if (pendingIncomingTransfer.receivedBytes >= pendingIncomingTransfer.meta.size) {
-            const blob = new Blob(pendingIncomingTransfer.chunks, { type: pendingIncomingTransfer.meta.mimeType || 'application/octet-stream' });
+          const meta = pendingIncomingTransfer.meta;
+          const countPrefix = meta.totalFiles > 1 ? `(${meta.fileIndex}/${meta.totalFiles}) ` : '';
+          const percent = Math.min(100, Math.round((pendingIncomingTransfer.receivedBytes / meta.size) * 100));
+          updateHud(`Receiving ${countPrefix}`, meta.name, percent, pendingIncomingTransfer.receivedBytes, meta.size, pendingIncomingTransfer.startTime);
+
+          if (pendingIncomingTransfer.receivedBytes >= meta.size) {
+            const blob = new Blob(pendingIncomingTransfer.chunks, { type: meta.mimeType || 'application/octet-stream' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = pendingIncomingTransfer.meta.name;
+            a.download = meta.name;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
 
-            showToast(`Received : ${pendingIncomingTransfer.meta.name}`);
-            setTimeout(() => {
-              transferHud.classList.remove('show');
-              URL.revokeObjectURL(url);
-            }, 1200);
+            showToast(`Received : ${meta.name}`);
+
+            if (meta.fileIndex === meta.totalFiles) {
+              autoAcceptBatchFromPeer = null; // Batch complete
+              setTimeout(() => transferHud.classList.remove('show'), 1200);
+            }
+
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
             pendingIncomingTransfer = null;
           }
         }
       }
 
-      async function initiateSend(peerId, file) {
-        const peer = peers.get(peerId);
-        if (!peer) {
-          showToast("Peer is no longer connected.");
-          return;
-        }
+      // --- Folder Zipping & Directory Traversal ---
+      async function handleFolderSelection(fileList, targetPeerId) {
+        if (!fileList || fileList.length === 0) return;
 
-        showToast(`Connecting to ${peer.name}...`);
+        // Determine folder name from webkitRelativePath
+        const firstPath = fileList[0].webkitRelativePath || '';
+        const folderName = firstPath.split('/')[0] || 'Folder';
+        const zipFileName = `${folderName}.zip`;
+
+        showToast(`Compressing folder into ${zipFileName}...`);
+        updateHud('Compressing', zipFileName, 0, 0, 100, Date.now());
 
         try {
-          const dc = await ensureDataChannelReady(peerId);
-          const transferId = crypto.randomUUID();
-          const transfer = {
-            id: transferId,
-            peerId: peerId,
-            file: file,
-            name: file.name,
-            size: file.size,
-            mimeType: file.type,
-            startTime: Date.now()
-          };
-          activeTransfers.set(transferId, transfer);
+          if (typeof JSZip === 'undefined') {
+            throw new Error('JSZip library is still loading. Please retry in a second.');
+          }
 
-          dc.send(JSON.stringify({
-            type: 'header',
-            transferId: transferId,
-            name: file.name,
-            size: file.size,
-            mimeType: file.type
-          }));
+          const zip = new JSZip();
+          for (let i = 0; i < fileList.length; i++) {
+            const file = fileList[i];
+            const relativePath = file.webkitRelativePath || file.name;
+            zip.file(relativePath, file);
+          }
 
-          showToast(`Transfer request sent...`);
+          const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+            updateHud('Compressing', zipFileName, Math.round(metadata.percent), 0, 100, Date.now());
+          });
+
+          const zipFile = new File([zipBlob], zipFileName, { type: 'application/zip' });
+          enqueueFilesToSend(targetPeerId, [zipFile]);
         } catch(err) {
-          console.error("Failed to initiate transfer:", err);
-          showToast(err.message || "Failed to establish WebRTC connection.");
+          console.error("Folder compression error:", err);
+          showToast(`Compression failed: ${err.message}`);
+          transferHud.classList.remove('show');
         }
       }
 
-      function sendFileChunks(transfer) {
-        const peer = peers.get(transfer.peerId);
-        if (!peer || !peer.dataChannel || peer.dataChannel.readyState !== 'open') {
-          showToast("Connection closed unexpectedly.");
-          transferHud.classList.remove('show');
-          return;
-        }
+      async function handleDragAndDropItems(items, targetPeerId) {
+        const filesToQueue = [];
+        const folderEntries = [];
 
-        const dc = peer.dataChannel;
-        let offset = 0;
-
-        function sliceNext() {
-          const slice = transfer.file.slice(offset, offset + CHUNK_SIZE);
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            if (dc.readyState !== 'open') return;
-            dc.send(e.target.result);
-            offset += e.target.result.byteLength;
-            const percent = Math.min(100, Math.round((offset / transfer.size) * 100));
-            updateHud('Sending', transfer.name, percent, offset, transfer.size, transfer.startTime);
-
-            if (offset < transfer.size) {
-              if (dc.bufferedAmount > BUFFER_HIGH) {
-                dc.onbufferedamountlow = () => {
-                  dc.onbufferedamountlow = null;
-                  sliceNext();
-                };
-              } else {
-                sliceNext();
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.webkitGetAsEntry) {
+            const entry = item.webkitGetAsEntry();
+            if (entry) {
+              if (entry.isDirectory) {
+                folderEntries.push(entry);
+              } else if (entry.isFile) {
+                const file = item.getAsFile();
+                if (file) filesToQueue.push(file);
               }
-            } else {
-              showToast(`Sent : ${transfer.name}`);
-              setTimeout(() => transferHud.classList.remove('show'), 1200);
-              activeTransfers.delete(transfer.id);
             }
-          };
-          reader.readAsArrayBuffer(slice);
+          } else {
+            const file = item.getAsFile();
+            if (file) filesToQueue.push(file);
+          }
         }
-        sliceNext();
+
+        // Process individual files
+        if (filesToQueue.length > 0) {
+          enqueueFilesToSend(targetPeerId, filesToQueue);
+        }
+
+        // Process directories as Zips
+        for (const dirEntry of folderEntries) {
+          const zip = new JSZip();
+          const zipFileName = `${dirEntry.name}.zip`;
+          showToast(`Compressing ${dirEntry.name}...`);
+
+          await traverseDirectoryEntry(dirEntry, '', zip);
+
+          const zipBlob = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+            updateHud('Compressing', zipFileName, Math.round(metadata.percent), 0, 100, Date.now());
+          });
+
+          const zipFile = new File([zipBlob], zipFileName, { type: 'application/zip' });
+          enqueueFilesToSend(targetPeerId, [zipFile]);
+        }
+      }
+
+      async function traverseDirectoryEntry(dirEntry, currentPath, zip) {
+        const reader = dirEntry.createReader();
+        const entries = await new Promise((resolve) => {
+          reader.readEntries((results) => resolve(results || []));
+        });
+
+        for (const entry of entries) {
+          const entryPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+          if (entry.isFile) {
+            const file = await new Promise((resolve) => entry.file(resolve));
+            zip.file(entryPath, file);
+          } else if (entry.isDirectory) {
+            await traverseDirectoryEntry(entry, entryPath, zip);
+          }
+        }
+      }
+
+      // --- Drag & Drop ---
+      function setupDragAndDrop() {
+        window.ondragenter = (e) => { e.preventDefault(); dropOverlay.classList.add('active'); };
+        window.ondragleave = (e) => { if (e.clientX <= 0 || e.clientY <= 0) dropOverlay.classList.remove('active'); };
+        window.ondragover = (e) => e.preventDefault();
+        
+        window.ondrop = (e) => {
+          e.preventDefault();
+          dropOverlay.classList.remove('active');
+          
+          const list = Array.from(peers.values());
+          if (!list.length) return showToast("No peers connected.");
+          const target = selectedTargetPeer || list[0].peerId;
+
+          if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+            handleDragAndDropItems(e.dataTransfer.items, target);
+          } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            enqueueFilesToSend(target, e.dataTransfer.files);
+          }
+        };
+
+        filePicker.onchange = () => {
+          if (selectedTargetPeer && filePicker.files.length > 0) {
+            enqueueFilesToSend(selectedTargetPeer, filePicker.files);
+          }
+          filePicker.value = '';
+        };
+
+        folderPicker.onchange = () => {
+          if (selectedTargetPeer && folderPicker.files.length > 0) {
+            handleFolderSelection(folderPicker.files, selectedTargetPeer);
+          }
+          folderPicker.value = '';
+        };
       }
 
       function updateHud(action, name, pct, sent, total, start) {
@@ -1399,35 +1616,28 @@
         hudPercent.textContent = `${pct}%`;
         hudProgressBar.style.width = `${pct}%`;
         const elapsed = (Date.now() - start) / 1000;
-        if (elapsed > 0.3) {
+        if (elapsed > 0.3 && total > 0) {
           const speed = sent / elapsed;
           hudSpeed.textContent = `${formatBytes(speed)}/s`;
           hudEta.textContent = `${Math.max(0, Math.round((total - sent) / speed))}s left`;
         }
       }
 
-      function setupDragAndDrop() {
-        window.ondragenter = (e) => { e.preventDefault(); dropOverlay.classList.add('active'); };
-        window.ondragleave = (e) => { if (e.clientX <= 0 || e.clientY <= 0) dropOverlay.classList.remove('active'); };
-        window.ondragover = (e) => e.preventDefault();
-        window.ondrop = (e) => {
-          e.preventDefault();
-          dropOverlay.classList.remove('active');
-          const list = Array.from(peers.values());
-          if (!list.length) return showToast("No peers connected.");
-          const target = targetPeerForUpload || list[0].peerId;
-          Array.from(e.dataTransfer.files).forEach(f => initiateSend(target, f));
-        };
-
-        filePicker.onchange = () => {
-          if (targetPeerForUpload) {
-            Array.from(filePicker.files).forEach(f => initiateSend(targetPeerForUpload, f));
-          }
-          filePicker.value = '';
-        };
-      }
-
       function setupModals() {
+        // Peer Action Picker (Files vs Folder)
+        actionPickFilesBtn.onclick = () => {
+          peerActionModal.classList.remove('show');
+          filePicker.click();
+        };
+
+        actionPickFolderBtn.onclick = () => {
+          peerActionModal.classList.remove('show');
+          folderPicker.click();
+        };
+
+        closePeerActionModal.onclick = () => peerActionModal.classList.remove('show');
+
+        // Settings Modal
         document.getElementById('roomBtn').onclick = () => openSettings();
         document.getElementById('settingsBtn').onclick = () => openSettings();
         document.getElementById('closeSettingsModal').onclick = () => document.getElementById('settingsModal').classList.remove('show');
@@ -1454,9 +1664,11 @@
           showToast('Room link copied!');
         };
 
+        // Incoming Prompt
         document.getElementById('acceptFileBtn').onclick = () => {
           document.getElementById('incomingPromptModal').classList.remove('show');
           if (pendingIncomingTransfer) {
+            autoAcceptBatchFromPeer = pendingIncomingTransfer.peerId;
             const peer = peers.get(pendingIncomingTransfer.peerId);
             if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
               peer.dataChannel.send(JSON.stringify({ type: 'accept', transferId: pendingIncomingTransfer.meta.transferId }));
@@ -1467,6 +1679,7 @@
         document.getElementById('declineFileBtn').onclick = () => {
           document.getElementById('incomingPromptModal').classList.remove('show');
           if (pendingIncomingTransfer) {
+            autoAcceptBatchFromPeer = null;
             const peer = peers.get(pendingIncomingTransfer.peerId);
             if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
               peer.dataChannel.send(JSON.stringify({ type: 'decline', transferId: pendingIncomingTransfer.meta.transferId }));

@@ -12,7 +12,15 @@ export class SignalingRoom {
   async fetch(request) {
     const upgradeHeader = request.headers.get("Upgrade");
     if (!upgradeHeader || upgradeHeader.toLowerCase() !== "websocket") {
-      return new Response("Expected WebSocket Upgrade header", { status: 426 });
+      return new Response("Expected WebSocket Upgrade header", {
+        status: 426,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+          "Pragma": "no-cache",
+          "Expires": "0",
+          "Surrogate-Control": "no-store"
+        }
+      });
     }
 
     const pair = new WebSocketPair();
@@ -118,7 +126,6 @@ export class SignalingRoom {
         }
 
         case "sync": {
-          // Re-synchronisation pour les appareils sortant de veille
           session.lastSeen = Date.now();
           const existingPeers = [];
           for (const [peerWs, peerSession] of this.sessions.entries()) {
@@ -225,11 +232,20 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    // En-têtes stricts anti-cache pour iOS Safari et navigateurs mobiles
+    const noCacheHeaders = {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      "Pragma": "no-cache",
+      "Expires": "0",
+      "Surrogate-Control": "no-store",
+      "Access-Control-Allow-Origin": "*",
+    };
+
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
         headers: {
-          "Access-Control-Allow-Origin": "*",
+          ...noCacheHeaders,
           "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
           "Access-Control-Allow-Headers": "*",
         },
@@ -240,7 +256,7 @@ export default {
       let roomId = url.searchParams.get("room") || "general";
 
       if (!env.ROOM_DO) {
-        return new Response("Binding ROOM_DO missing", { status: 500 });
+        return new Response("Binding ROOM_DO missing", { status: 500, headers: noCacheHeaders });
       }
 
       const roomObjectId = env.ROOM_DO.idFromName(roomId);
@@ -250,10 +266,27 @@ export default {
 
     if (url.pathname === "/health") {
       return new Response(JSON.stringify({ status: "ok" }), {
-        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+        headers: {
+          ...noCacheHeaders,
+          "Content-Type": "application/json",
+        },
       });
     }
 
-    return new Response("P2P Signaling Server running.", { status: 200 });
+    // Si des assets statiques sont configurés via env.ASSETS
+    if (env.ASSETS) {
+      const assetResponse = await env.ASSETS.fetch(request);
+      const newHeaders = new Headers(assetResponse.headers);
+      for (const [key, value] of Object.entries(noCacheHeaders)) {
+        newHeaders.set(key, value);
+      }
+      return new Response(assetResponse.body, {
+        status: assetResponse.status,
+        statusText: assetResponse.statusText,
+        headers: newHeaders,
+      });
+    }
+
+    return new Response("P2P Signaling Server running.", { status: 200, headers: noCacheHeaders });
   },
 };

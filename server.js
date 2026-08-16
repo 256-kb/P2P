@@ -5,24 +5,35 @@ const path = require('path');
 const crypto = require('crypto');
 
 const PORT = 8787;
-const sessions = new Map(); // socket -> metadata
+const sessions = new Map();
 
 const HEARTBEAT_INTERVAL_MS = 10000;
 const SESSION_TIMEOUT_MS = 30000;
 
+const noCacheHeaders = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+  'Surrogate-Control': 'no-store',
+  'Access-Control-Allow-Origin': '*'
+};
+
 const server = http.createServer((req, res) => {
   if (req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+    res.writeHead(200, { ...noCacheHeaders, 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ status: 'ok', activeSessions: sessions.size }));
   }
 
   const filePath = path.join(__dirname, 'client', 'index.html');
   fs.readFile(filePath, (err, data) => {
     if (err) {
-      res.writeHead(500);
+      res.writeHead(500, noCacheHeaders);
       return res.end('Erreur lors du chargement de index.html');
     }
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.writeHead(200, {
+      ...noCacheHeaders,
+      'Content-Type': 'text/html; charset=utf-8'
+    });
     res.end(data);
   });
 });
@@ -75,7 +86,7 @@ server.on('upgrade', (req, socket, head) => {
   socket.on('error', () => handleDisconnect(session));
 });
 
-// Watchdog de purge des sockets inactifs (ex: mobile éteint sans TCP FIN)
+// Watchdog de purge
 setInterval(() => {
   const now = Date.now();
   for (const [socket, session] of sessions.entries()) {
@@ -87,7 +98,6 @@ setInterval(() => {
         broadcastInRoom(session.room, { type: 'peer-left', peerId: session.peerId }, session);
       }
     } else if (session.joined) {
-      // Envoyer un ping de contrôle
       sendWs(socket, { type: 'ping', timestamp: now });
     }
   }
@@ -117,7 +127,6 @@ function handleMessage(session, data) {
     case 'join': {
       const requestedId = data.peerId || session.peerId;
       
-      // Fermer toute ancienne socket fantôme ayant le même peerId
       for (const [sSocket, sData] of sessions) {
         if (sData !== session && sData.peerId === requestedId) {
           sessions.delete(sSocket);
@@ -166,7 +175,6 @@ function handleMessage(session, data) {
     }
 
     case 'sync': {
-      // Re-synchronisation demandée par un mobile au réveil
       session.lastSeen = Date.now();
       const peersInRoom = [];
       for (const [_, s] of sessions) {
