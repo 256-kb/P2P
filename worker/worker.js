@@ -1,5 +1,5 @@
 /**
- * Cloudflare Worker + Durable Objects WebSocket Signaling Server for Snapdrop P2P
+ * Cloudflare Worker + Durable Objects WebSocket Signaling Server for P2P
  */
 
 export class SignalingRoom {
@@ -27,8 +27,8 @@ export class SignalingRoom {
     const tempId = crypto.randomUUID();
     this.sessions.set(server, {
       peerId: tempId,
-      name: "Appareil",
-      device: { type: "desktop", os: "Inconnu", browser: "Inconnu" },
+      name: "Device",
+      device: { type: "desktop", os: "Unknown", browser: "Browser" },
       joined: false,
     });
 
@@ -76,11 +76,12 @@ export class SignalingRoom {
           }
 
           session.peerId = requestedId;
-          const requestedName = (data.name || "Appareil").trim();
+          const requestedName = (data.name || "Device").trim();
           session.name = this.getUniqueName(requestedName, ws);
-          session.device = data.device || { type: "desktop", os: "Inconnu", browser: "Inconnu" };
+          session.device = data.device || { type: "desktop", os: "Unknown", browser: "Browser" };
           session.joined = true;
 
+          // 1. Collecter tous les pairs existants
           const existingPeers = [];
           for (const [peerWs, peerSession] of this.sessions.entries()) {
             if (peerWs !== ws && peerSession.joined) {
@@ -92,6 +93,7 @@ export class SignalingRoom {
             }
           }
 
+          // 2. Confirmer la connexion et envoyer la liste des pairs au nouveau venu
           this.safeSend(ws, {
             type: "joined",
             peerId: session.peerId,
@@ -99,6 +101,7 @@ export class SignalingRoom {
             peers: existingPeers,
           });
 
+          // 3. Diffuser INSTANTANÉMENT l'arrivée du pair à tous les autres clients
           this.broadcast(
             {
               type: "peer-joined",
@@ -221,6 +224,6 @@ export default {
       });
     }
 
-    return new Response("Snapdrop P2P Signaling Server running.", { status: 200 });
+    return new Response("P2P Signaling Server running.", { status: 200 });
   },
 };

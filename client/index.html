@@ -28,7 +28,7 @@
       --self-badge-bg: #ffffff;
       --self-badge-fg: #09090b;
       --progress-fill: #ffffff;
-      --modal-backdrop: rgba(0, 0, 0, 0.7);
+      --modal-backdrop: rgba(0, 0, 0, 0.75);
       --drop-overlay-bg: rgba(9, 9, 11, 0.94);
       --btn-primary-bg: #ffffff;
       --btn-primary-fg: #09090b;
@@ -82,7 +82,7 @@
       transition: background-color 0.2s ease, color 0.2s ease;
     }
 
-    /* Minimalist Header */
+    /* Header */
     header {
       display: flex;
       align-items: center;
@@ -141,7 +141,7 @@
       background: var(--surface-hover);
     }
 
-    /* Room LED indicator */
+    /* Room LED: White (Disconnected), Green (Connected) */
     .status-dot {
       width: 7px;
       height: 7px;
@@ -182,7 +182,7 @@
       background: var(--surface-hover);
     }
 
-    /* Radar Arena */
+    /* Radar Area */
     main {
       flex: 1;
       position: relative;
@@ -295,6 +295,12 @@
       border-radius: 10px;
       transform: translate(-50%, -50%);
       z-index: 7;
+      animation: peerFadeIn 0.25s ease forwards;
+    }
+
+    @keyframes peerFadeIn {
+      from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+      to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
     }
 
     .peer-node:hover {
@@ -361,7 +367,7 @@
       text-align: center;
     }
 
-    /* Live Transfer HUD (Completely hidden when idle, zero ghost borders) */
+    /* Live Transfer HUD */
     .transfer-bar-container {
       position: fixed;
       bottom: 20px;
@@ -569,7 +575,7 @@
         <span id="roomLabel">Room: General</span>
       </div>
 
-      <!-- Theme Switch (Black & White Toggle) -->
+      <!-- Theme Switch -->
       <button class="icon-btn" id="themeToggleBtn" title="Switch Theme (Dark / Light)">
         <svg id="themeIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5"></circle>
@@ -586,7 +592,7 @@
 
       <!-- Settings Button -->
       <button class="icon-btn" id="settingsBtn" title="Settings">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       </button>
     </div>
   </header>
@@ -682,7 +688,14 @@
       const CHUNK_SIZE = 64 * 1024;
       const BUFFER_HIGH = 1024 * 1024;
       const BUFFER_LOW = 256 * 1024;
-      const STUN_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+      const STUN_SERVERS = {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' }
+        ],
+        iceCandidatePoolSize: 10
+      };
 
       const ANIMALS = ['Falcon', 'Fox', 'Lynx', 'Otter', 'Eagle', 'Panther', 'Wolf', 'Dolphin', 'Tiger', 'Panda', 'Hawk', 'Badger'];
       const ADJECTIVES = ['Solar', 'Cosmic', 'Agile', 'Emerald', 'Crimson', 'Azure', 'Golden', 'Silver', 'Shadow', 'Velvet'];
@@ -694,6 +707,7 @@
         return `${adj} ${a} ${num}`;
       }
 
+      // Tab session isolation
       let selfPeerId = sessionStorage.getItem('snapdrop_peer_id') || crypto.randomUUID();
       sessionStorage.setItem('snapdrop_peer_id', selfPeerId);
 
@@ -706,7 +720,8 @@
       let currentTheme = localStorage.getItem('snapdrop_theme') || 'dark';
 
       let ws = null;
-      const peers = new Map();
+      let pingTimer = null;
+      const peers = new Map(); // peerId -> { peerId, name, device, pc, dataChannel, iceQueue, dcResolvers, sendQueue }
       let targetPeerForUpload = null;
       const activeTransfers = new Map();
       let pendingIncomingTransfer = null;
@@ -785,20 +800,39 @@
         }
       }
 
-      function cleanupConnections() {
+      function cleanupPeer(peer) {
+        if (!peer) return;
+        if (peer.dataChannel) {
+          try { peer.dataChannel.close(); } catch(e) {}
+          peer.dataChannel = null;
+        }
+        if (peer.pc) {
+          try { peer.pc.close(); } catch(e) {}
+          peer.pc = null;
+        }
+        peer.iceQueue = [];
+        peer.sendQueue = [];
+        if (peer.dcResolvers) {
+          peer.dcResolvers.forEach(r => r.reject(new Error('Peer cleaned up')));
+          peer.dcResolvers = [];
+        }
+      }
+
+      function cleanupAllConnections() {
         for (const [_, p] of peers) {
-          if (p.dataChannel) try { p.dataChannel.close(); } catch(e) {}
-          if (p.pc) try { p.pc.close(); } catch(e) {}
+          cleanupPeer(p);
         }
         peers.clear();
         renderPeers();
       }
 
+      // --- WebSocket Signaling with Instant Room Synchronization ---
       function initWebSocket() {
         if (ws) {
           try { ws.onclose = null; ws.close(); } catch(e) {}
         }
-        cleanupConnections();
+        clearInterval(pingTimer);
+        cleanupAllConnections();
 
         const url = new URL(wsServerUrl, window.location.href);
         url.searchParams.set('room', roomId);
@@ -824,66 +858,135 @@
             name: selfName,
             device: selfDevice
           }));
+
+          // Keep-alive ping
+          pingTimer = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'ping' }));
+            }
+          }, 25000);
         };
 
         ws.onmessage = (e) => {
           try {
             const data = JSON.parse(e.data);
-            if (data.type === 'joined') {
-              selfPeerId = data.peerId;
-              sessionStorage.setItem('snapdrop_peer_id', selfPeerId);
-
-              if (data.assignedName && data.assignedName !== selfName) {
-                selfName = data.assignedName;
-                sessionStorage.setItem('snapdrop_device_name', selfName);
-                selfDisplayName.textContent = selfName;
-              }
-
-              peers.clear();
-              (data.peers || []).forEach(addPeer);
-              renderPeers();
-            } else if (data.type === 'peer-joined') {
-              addPeer(data.peer);
-              renderPeers();
-              showToast(`${data.peer.name} joined`);
-            } else if (data.type === 'peer-left') {
-              removePeer(data.peerId);
-              renderPeers();
-            } else if (data.type === 'signal') {
-              handleSignal(data.sender, data.signal);
-            }
-          } catch(err) {}
+            handleSignalingMessage(data);
+          } catch(err) {
+            console.error("Signaling message error:", err);
+          }
         };
 
         ws.onclose = () => {
           statusDot.className = 'status-dot';
           selfDeviceDetails.textContent = 'Offline';
+          clearInterval(pingTimer);
           setTimeout(() => {
             if (ws && ws.readyState === WebSocket.CLOSED) {
               initWebSocket();
             }
-          }, 3000);
+          }, 2500);
         };
       }
 
-      function addPeer(peer) {
-        if (!peer || peer.peerId === selfPeerId) return;
-        peers.set(peer.peerId, { ...peer, pc: null, dataChannel: null, iceQueue: [] });
-      }
+      function handleSignalingMessage(data) {
+        switch (data.type) {
+          case 'joined': {
+            selfPeerId = data.peerId;
+            sessionStorage.setItem('snapdrop_peer_id', selfPeerId);
 
-      function removePeer(peerId) {
-        const p = peers.get(peerId);
-        if (p) {
-          if (p.dataChannel) try { p.dataChannel.close(); } catch(e) {}
-          if (p.pc) try { p.pc.close(); } catch(e) {}
-          peers.delete(peerId);
+            if (data.assignedName && data.assignedName !== selfName) {
+              selfName = data.assignedName;
+              sessionStorage.setItem('snapdrop_device_name', selfName);
+              selfDisplayName.textContent = selfName;
+            }
+
+            // Sync peer list from server
+            const incomingIds = new Set((data.peers || []).map(p => p.peerId));
+            
+            // Remove peers that are no longer in room
+            for (const [id, peer] of peers.entries()) {
+              if (!incomingIds.has(id)) {
+                cleanupPeer(peer);
+                peers.delete(id);
+              }
+            }
+
+            // Add or update active peers
+            (data.peers || []).forEach(addOrUpdatePeer);
+            renderPeers();
+            break;
+          }
+
+          case 'peer-joined': {
+            // New peer joined the room -> INSTANT UI update
+            if (data.peer && data.peer.peerId !== selfPeerId) {
+              addOrUpdatePeer(data.peer);
+              renderPeers();
+              showToast(`${data.peer.name} joined`);
+            }
+            break;
+          }
+
+          case 'peer-left': {
+            // Peer disconnected -> INSTANT UI update
+            if (data.peerId) {
+              const p = peers.get(data.peerId);
+              if (p) {
+                cleanupPeer(p);
+                peers.delete(data.peerId);
+                renderPeers();
+                showToast(`${p.name} left`);
+              }
+            }
+            break;
+          }
+
+          case 'peer-updated': {
+            if (data.peer && data.peer.peerId !== selfPeerId) {
+              addOrUpdatePeer(data.peer);
+              renderPeers();
+            }
+            break;
+          }
+
+          case 'signal': {
+            if (data.sender && data.signal) {
+              handlePeerSignal(data.sender, data.signal);
+            }
+            break;
+          }
         }
       }
 
+      function addOrUpdatePeer(peerData) {
+        if (!peerData || peerData.peerId === selfPeerId) return;
+
+        let existing = peers.get(peerData.peerId);
+        if (existing) {
+          existing.name = peerData.name || existing.name;
+          existing.device = peerData.device || existing.device;
+        } else {
+          peers.set(peerData.peerId, {
+            peerId: peerData.peerId,
+            name: peerData.name || 'Device',
+            device: peerData.device || { type: 'desktop', os: 'Unknown' },
+            pc: null,
+            dataChannel: null,
+            iceQueue: [],
+            dcResolvers: [],
+            sendQueue: [],
+            isMakingOffer: false
+          });
+        }
+      }
+
+      // --- Dynamic Orbital UI Render ---
       function renderPeers() {
         peersLayer.innerHTML = '';
         const list = Array.from(peers.values());
         emptyState.style.display = list.length === 0 ? 'flex' : 'none';
+
+        if (list.length === 0) return;
 
         const radius = window.innerWidth > 640 ? 180 : 125;
         list.forEach((peer, i) => {
@@ -900,7 +1003,7 @@
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="peer-icon"></svg>
             </div>
             <div class="node-title">${escapeHtml(peer.name)}</div>
-            <div class="node-subtitle">${peer.device.os}</div>
+            <div class="node-subtitle">${escapeHtml(peer.device.os)}</div>
           `;
 
           const svg = node.querySelector('.peer-icon');
@@ -914,72 +1017,220 @@
         });
       }
 
-      function getOrCreatePC(peerId, isInitiator = false) {
-        const peer = peers.get(peerId);
+      // --- WebRTC Robust State Machine & Asymmetric Negotiation ---
+      function getOrCreatePC(peerId) {
+        let peer = peers.get(peerId);
         if (!peer) return null;
-        if (peer.pc && peer.pc.connectionState !== 'closed' && peer.pc.connectionState !== 'failed') return peer.pc;
+
+        if (peer.pc && peer.pc.connectionState !== 'closed' && peer.pc.connectionState !== 'failed') {
+          return peer.pc;
+        }
+
+        cleanupPeer(peer);
 
         const pc = new RTCPeerConnection(STUN_SERVERS);
         peer.pc = pc;
+        peer.iceQueue = [];
 
         pc.onicecandidate = (e) => {
           if (e.candidate && ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'signal', target: peerId, signal: { type: 'candidate', candidate: e.candidate } }));
+            ws.send(JSON.stringify({
+              type: 'signal',
+              target: peerId,
+              signal: { type: 'candidate', candidate: e.candidate }
+            }));
           }
         };
 
-        if (isInitiator) {
-          setupDC(peerId, pc.createDataChannel('p2p-transfer', { ordered: true }));
-        } else {
-          pc.ondatachannel = (e) => setupDC(peerId, e.channel);
-        }
+        pc.ondatachannel = (e) => {
+          console.log(`[WebRTC] Received DataChannel from ${peer.name}`);
+          setupDataChannel(peerId, e.channel);
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          if (pc.iceConnectionState === 'failed') {
+            try { pc.restartIce(); } catch(e) {}
+          }
+        };
+
         return pc;
       }
 
-      function setupDC(peerId, dc) {
+      function setupDataChannel(peerId, dc) {
         const peer = peers.get(peerId);
         if (!peer) return;
+
         peer.dataChannel = dc;
         dc.binaryType = 'arraybuffer';
         dc.bufferedAmountLowThreshold = BUFFER_LOW;
 
+        dc.onopen = () => {
+          console.log(`[WebRTC] DataChannel OPEN with ${peer.name}`);
+          
+          // Resolve any pending wait promises
+          if (peer.dcResolvers && peer.dcResolvers.length > 0) {
+            peer.dcResolvers.forEach(r => r.resolve(dc));
+            peer.dcResolvers = [];
+          }
+
+          // Flush queued control messages
+          if (peer.sendQueue && peer.sendQueue.length > 0) {
+            while (peer.sendQueue.length > 0) {
+              const msg = peer.sendQueue.shift();
+              try {
+                dc.send(typeof msg === 'string' ? msg : JSON.stringify(msg));
+              } catch(e) {
+                console.error("Queue send error:", e);
+              }
+            }
+          }
+        };
+
         dc.onmessage = (e) => handleDataMessage(peerId, e.data);
+
+        dc.onclose = () => {
+          console.log(`[WebRTC] DataChannel CLOSED with ${peer.name}`);
+          peer.dataChannel = null;
+        };
+
+        dc.onerror = (err) => {
+          console.error(`[WebRTC] DataChannel ERROR with ${peer.name}:`, err);
+        };
       }
 
-      async function handleSignal(senderId, signal) {
+      async function ensureDataChannelReady(peerId) {
+        const peer = peers.get(peerId);
+        if (!peer) throw new Error('Peer not found in room');
+
+        if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
+          return peer.dataChannel;
+        }
+
+        const pc = getOrCreatePC(peerId);
+
+        // If no data channel exists, create one
+        if (!peer.dataChannel || peer.dataChannel.readyState === 'closed') {
+          const dc = pc.createDataChannel('p2p-transfer', { ordered: true });
+          setupDataChannel(peerId, dc);
+        }
+
+        return new Promise(async (resolve, reject) => {
+          const resolverObj = { resolve, reject };
+          peer.dcResolvers.push(resolverObj);
+
+          const timeout = setTimeout(() => {
+            const idx = peer.dcResolvers.indexOf(resolverObj);
+            if (idx !== -1) {
+              peer.dcResolvers.splice(idx, 1);
+              reject(new Error('Connection timed out. Please ensure both devices are online and retry.'));
+            }
+          }, 12000);
+
+          try {
+            // Trigger SDP offer if stable
+            if (pc.signalingState === 'stable') {
+              peer.isMakingOffer = true;
+              const offer = await pc.createOffer();
+              await pc.setLocalDescription(offer);
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  type: 'signal',
+                  target: peerId,
+                  signal: { type: 'offer', sdp: offer }
+                }));
+              }
+            }
+          } catch(err) {
+            clearTimeout(timeout);
+            reject(err);
+          } finally {
+            peer.isMakingOffer = false;
+          }
+        });
+      }
+
+      async function handlePeerSignal(senderId, signal) {
         const peer = peers.get(senderId);
         if (!peer) return;
-        const pc = getOrCreatePC(senderId, false);
 
-        if (signal.type === 'offer') {
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-          while (peer.iceQueue.length) await pc.addIceCandidate(new RTCIceCandidate(peer.iceQueue.shift()));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          ws.send(JSON.stringify({ type: 'signal', target: senderId, signal: { type: 'answer', sdp: answer } }));
-        } else if (signal.type === 'answer') {
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-          while (peer.iceQueue.length) await pc.addIceCandidate(new RTCIceCandidate(peer.iceQueue.shift()));
-        } else if (signal.type === 'candidate') {
-          if (pc.remoteDescription && pc.remoteDescription.type) {
-            await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
-          } else {
-            peer.iceQueue.push(signal.candidate);
+        const pc = getOrCreatePC(senderId);
+
+        try {
+          if (signal.type === 'offer') {
+            const isCollision = peer.isMakingOffer || pc.signalingState !== 'stable';
+            
+            // Polite collision handling: resolve state before accepting incoming offer
+            if (isCollision) {
+              await Promise.all([
+                pc.setLocalDescription({ type: 'rollback' }).catch(() => {}),
+                pc.setRemoteDescription(new RTCSessionDescription(signal.sdp))
+              ]);
+            } else {
+              await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+            }
+
+            // Flush queued remote ICE candidates
+            while (peer.iceQueue.length > 0) {
+              const cand = peer.iceQueue.shift();
+              await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+            }
+
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'signal',
+                target: senderId,
+                signal: { type: 'answer', sdp: answer }
+              }));
+            }
+
+          } else if (signal.type === 'answer') {
+            if (pc.signalingState === 'have-local-offer') {
+              await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+
+              // Flush queued remote ICE candidates
+              while (peer.iceQueue.length > 0) {
+                const cand = peer.iceQueue.shift();
+                await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+              }
+            }
+          } else if (signal.type === 'candidate') {
+            if (pc.remoteDescription && pc.remoteDescription.type) {
+              await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
+            } else {
+              peer.iceQueue.push(signal.candidate);
+            }
           }
+        } catch(err) {
+          console.error(`[WebRTC] Signal handling error with ${senderId}:`, err);
         }
       }
 
+      // --- Transfer Protocol & Flow Control ---
       function handleDataMessage(peerId, data) {
         if (typeof data === 'string') {
-          const msg = JSON.parse(data);
-          if (msg.type === 'header') {
-            pendingIncomingTransfer = { peerId, meta: msg, chunks: [], receivedBytes: 0, startTime: Date.now() };
-            document.getElementById('incomingDesc').innerHTML = `<strong>${escapeHtml(peers.get(peerId)?.name || 'A peer')}</strong> wants to send:<br/><strong>${escapeHtml(msg.name)}</strong> (${formatBytes(msg.size)})`;
-            document.getElementById('incomingPromptModal').classList.add('show');
-          } else if (msg.type === 'accept') {
-            const transfer = activeTransfers.get(msg.transferId);
-            if (transfer) sendChunks(transfer);
-          }
+          try {
+            const msg = JSON.parse(data);
+            if (msg.type === 'header') {
+              pendingIncomingTransfer = {
+                peerId: peerId,
+                meta: msg,
+                chunks: [],
+                receivedBytes: 0,
+                startTime: Date.now()
+              };
+              document.getElementById('incomingDesc').innerHTML = `<strong>${escapeHtml(peers.get(peerId)?.name || 'A peer')}</strong> wants to send:<br/><strong>${escapeHtml(msg.name)}</strong> (${formatBytes(msg.size)})`;
+              document.getElementById('incomingPromptModal').classList.add('show');
+            } else if (msg.type === 'accept') {
+              const transfer = activeTransfers.get(msg.transferId);
+              if (transfer) sendFileChunks(transfer);
+            } else if (msg.type === 'decline') {
+              showToast('Peer declined the file transfer.');
+              transferHud.classList.remove('show');
+            }
+          } catch(e) {}
         } else if (data instanceof ArrayBuffer && pendingIncomingTransfer) {
           pendingIncomingTransfer.chunks.push(data);
           pendingIncomingTransfer.receivedBytes += data.byteLength;
@@ -987,49 +1238,71 @@
           updateHud('Receiving', pendingIncomingTransfer.meta.name, percent, pendingIncomingTransfer.receivedBytes, pendingIncomingTransfer.meta.size, pendingIncomingTransfer.startTime);
 
           if (pendingIncomingTransfer.receivedBytes >= pendingIncomingTransfer.meta.size) {
-            const blob = new Blob(pendingIncomingTransfer.chunks, { type: pendingIncomingTransfer.meta.mimeType });
+            const blob = new Blob(pendingIncomingTransfer.chunks, { type: pendingIncomingTransfer.meta.mimeType || 'application/octet-stream' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url; a.download = pendingIncomingTransfer.meta.name;
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            a.href = url;
+            a.download = pendingIncomingTransfer.meta.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
             showToast(`Received : ${pendingIncomingTransfer.meta.name}`);
-            setTimeout(() => transferHud.classList.remove('show'), 1200);
+            setTimeout(() => {
+              transferHud.classList.remove('show');
+              URL.revokeObjectURL(url);
+            }, 1200);
             pendingIncomingTransfer = null;
           }
         }
       }
 
       async function initiateSend(peerId, file) {
-        const transferId = crypto.randomUUID();
-        const transfer = { id: transferId, peerId, file, name: file.name, size: file.size, mimeType: file.type, startTime: Date.now() };
-        activeTransfers.set(transferId, transfer);
-
-        const pc = getOrCreatePC(peerId, true);
         const peer = peers.get(peerId);
+        if (!peer) {
+          showToast("Peer is no longer connected.");
+          return;
+        }
 
-        const sendHeader = () => {
-          peer.dataChannel.send(JSON.stringify({ type: 'header', transferId, name: file.name, size: file.size, mimeType: file.type }));
-          showToast(`Sending request...`);
-        };
+        showToast(`Connecting to ${peer.name}...`);
 
-        if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
-          sendHeader();
-        } else {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          ws.send(JSON.stringify({ type: 'signal', target: peerId, signal: { type: 'offer', sdp: offer } }));
-          const check = setInterval(() => {
-            if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
-              clearInterval(check);
-              sendHeader();
-            }
-          }, 100);
+        try {
+          const dc = await ensureDataChannelReady(peerId);
+          const transferId = crypto.randomUUID();
+          const transfer = {
+            id: transferId,
+            peerId: peerId,
+            file: file,
+            name: file.name,
+            size: file.size,
+            mimeType: file.type,
+            startTime: Date.now()
+          };
+          activeTransfers.set(transferId, transfer);
+
+          dc.send(JSON.stringify({
+            type: 'header',
+            transferId: transferId,
+            name: file.name,
+            size: file.size,
+            mimeType: file.type
+          }));
+
+          showToast(`Transfer request sent...`);
+        } catch(err) {
+          console.error("Failed to initiate transfer:", err);
+          showToast(err.message || "Failed to establish WebRTC connection.");
         }
       }
 
-      function sendChunks(transfer) {
+      function sendFileChunks(transfer) {
         const peer = peers.get(transfer.peerId);
-        if (!peer || !peer.dataChannel) return;
+        if (!peer || !peer.dataChannel || peer.dataChannel.readyState !== 'open') {
+          showToast("Connection closed unexpectedly.");
+          transferHud.classList.remove('show');
+          return;
+        }
+
         const dc = peer.dataChannel;
         let offset = 0;
 
@@ -1127,12 +1400,21 @@
         document.getElementById('acceptFileBtn').onclick = () => {
           document.getElementById('incomingPromptModal').classList.remove('show');
           if (pendingIncomingTransfer) {
-            peers.get(pendingIncomingTransfer.peerId)?.dataChannel.send(JSON.stringify({ type: 'accept', transferId: pendingIncomingTransfer.meta.transferId }));
+            const peer = peers.get(pendingIncomingTransfer.peerId);
+            if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
+              peer.dataChannel.send(JSON.stringify({ type: 'accept', transferId: pendingIncomingTransfer.meta.transferId }));
+            }
           }
         };
 
         document.getElementById('declineFileBtn').onclick = () => {
           document.getElementById('incomingPromptModal').classList.remove('show');
+          if (pendingIncomingTransfer) {
+            const peer = peers.get(pendingIncomingTransfer.peerId);
+            if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
+              peer.dataChannel.send(JSON.stringify({ type: 'decline', transferId: pendingIncomingTransfer.meta.transferId }));
+            }
+          }
           pendingIncomingTransfer = null;
         };
       }
@@ -1146,7 +1428,8 @@
 
       function showToast(msg) {
         const t = document.createElement('div');
-        t.className = 'toast'; t.textContent = msg;
+        t.className = 'toast';
+        t.textContent = msg;
         document.getElementById('toastContainer').appendChild(t);
         setTimeout(() => t.remove(), 2500);
       }

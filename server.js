@@ -5,7 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const PORT = 8787;
-const sessions = new Map(); // ws -> metadata
+const sessions = new Map(); // socket -> metadata
 
 const server = http.createServer((req, res) => {
   if (req.url === '/health') {
@@ -45,12 +45,14 @@ server.on('upgrade', (req, socket, head) => {
     `Sec-WebSocket-Accept: ${acceptKey}\r\n\r\n`
   );
 
+  const roomParam = new URL(req.url, `http://${req.headers.host || 'localhost'}`).searchParams.get('room') || 'general';
+
   const session = {
     socket,
     peerId: crypto.randomUUID(),
-    name: 'Appareil',
-    device: { type: 'desktop', os: 'Inconnu', browser: 'Inconnu' },
-    room: new URL(req.url, `http://${req.headers.host}`).searchParams.get('room') || 'general',
+    name: 'Device',
+    device: { type: 'desktop', os: 'Unknown', browser: 'Browser' },
+    room: roomParam,
     joined: false
   };
   sessions.set(socket, session);
@@ -91,8 +93,9 @@ function getUniqueNameInRoom(room, baseName, excludeSession = null) {
 function handleMessage(session, data) {
   switch (data.type) {
     case 'join': {
-      // Nettoyer toute ancienne session avec le même peerId
       const requestedId = data.peerId || session.peerId;
+      
+      // Fermer proprement toute session antérieure ayant le même peerId
       for (const [sSocket, sData] of sessions) {
         if (sData !== session && sData.peerId === requestedId) {
           sessions.delete(sSocket);
@@ -101,20 +104,24 @@ function handleMessage(session, data) {
       }
 
       session.peerId = requestedId;
-      const requestedName = (data.name || 'Appareil').trim();
-      // Résoudre les collisions de noms dans le salon
+      const requestedName = (data.name || 'Device').trim();
       session.name = getUniqueNameInRoom(session.room, requestedName, session);
       session.device = data.device || session.device;
       session.joined = true;
 
-      // Envoyer la liste des autres pairs dans le même salon
+      // 1. Lister tous les autres pairs actuellement dans le salon
       const peersInRoom = [];
       for (const [_, s] of sessions) {
         if (s !== session && s.joined && s.room === session.room) {
-          peersInRoom.push({ peerId: s.peerId, name: s.name, device: s.device });
+          peersInRoom.push({
+            peerId: s.peerId,
+            name: s.name,
+            device: s.device
+          });
         }
       }
 
+      // 2. Répondre au nouveau pair avec son état confirmé et la liste des pairs
       sendWs(session.socket, {
         type: 'joined',
         peerId: session.peerId,
@@ -122,18 +129,34 @@ function handleMessage(session, data) {
         peers: peersInRoom
       });
 
+      // 3. Diffuser IMMÉDIATEMENT l'arrivée du pair à tous les autres clients du salon
       broadcastInRoom(
         session.room,
-        { type: 'peer-joined', peer: { peerId: session.peerId, name: session.name, device: session.device } },
+        {
+          type: 'peer-joined',
+          peer: {
+            peerId: session.peerId,
+            name: session.name,
+            device: session.device
+          }
+        },
         session
       );
       break;
     }
 
     case 'signal': {
+      // Relai WebRTC : Offer, Answer, ICE Candidate vers le pair cible
+      const { target, signal } = data;
+      if (!target || !signal) break;
+
       for (const [_, s] of sessions) {
-        if (s.peerId === data.target) {
-          sendWs(s.socket, { type: 'signal', sender: session.peerId, signal: data.signal });
+        if (s.peerId === target && s.room === session.room) {
+          sendWs(s.socket, {
+            type: 'signal',
+            sender: session.peerId,
+            signal: signal
+          });
           break;
         }
       }
@@ -141,7 +164,7 @@ function handleMessage(session, data) {
     }
 
     case 'ping': {
-      sendWs(session.socket, { type: 'pong' });
+      sendWs(session.socket, { type: 'pong', timestamp: Date.now() });
       break;
     }
   }
@@ -151,12 +174,19 @@ function handleDisconnect(session) {
   if (sessions.has(session.socket)) {
     sessions.delete(session.socket);
     if (session.joined) {
-      broadcastInRoom(session.room, { type: 'peer-left', peerId: session.peerId }, session);
+      broadcastInRoom(
+        session.room,
+        {
+          type: 'peer-left',
+          peerId: session.peerId
+        },
+        session
+      );
     }
   }
 }
 
-function broadcastInRoom(room, data, excludeSession) {
+function broadcastInRoom(room, data, excludeSession = null) {
   for (const [_, s] of sessions) {
     if (s !== excludeSession && s.joined && s.room === room) {
       sendWs(s.socket, data);
@@ -219,6 +249,5 @@ function decodeWebSocketFrame(buffer) {
 }
 
 server.listen(PORT, () => {
-  console.log(`\n🚀 Serveur Snapdrop P2P relancé avec succès !`);
-  console.log(`👉 Ouvrez votre navigateur sur : http://localhost:${PORT}\n`);
+  console.log(`\n🚀 P2P Signaling Server running on http://localhost:${PORT}`);
 });
