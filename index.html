@@ -1283,11 +1283,27 @@
       }
 
       function sendControl(conn, msgObj) {
-        if (!conn || !conn.open) return;
+        if (!conn) {
+          console.warn('[sendControl] Connection is null for message:', msgObj.type);
+          return false;
+        }
+        if (!conn.open) {
+          console.warn('[sendControl] Connection is not open with peer:', conn.peer, 'message:', msgObj.type);
+          return false;
+        }
         try {
           conn.send(msgObj);
+          console.log(`[sendControl] Sent ${msgObj.type} to ${conn.peer}`);
+          return true;
         } catch(e) {
-          try { conn.send(JSON.stringify(msgObj)); } catch(err) {}
+          try {
+            conn.send(JSON.stringify(msgObj));
+            console.log(`[sendControl] Sent stringified ${msgObj.type} to ${conn.peer}`);
+            return true;
+          } catch(err) {
+            console.error('[sendControl] Failed to send to peer:', conn.peer, err);
+            return false;
+          }
         }
       }
 
@@ -1534,14 +1550,52 @@
         }
       }
 
-      function sendSingleFile(peerId, file, fileIndex = 1, totalFiles = 1) {
-        const peer = peers.get(peerId);
-        if (!peer || !peer.conn || !peer.conn.open) {
-          throw new Error('Peer is not connected');
+      async function ensurePeerConnectionOpen(peerId) {
+        let peer = peers.get(peerId);
+        if (peer && peer.conn && peer.conn.open) {
+          return peer.conn;
         }
 
-        const conn = peer.conn;
+        console.log(`[Mobile/P2P] Establishing DataChannel tunnel to ${peerId}...`);
+        connectToPeer(peerId);
+
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            const current = peers.get(peerId);
+            if (current && current.conn && current.conn.open) {
+              resolve(current.conn);
+            } else {
+              reject(new Error('Connection timeout with peer'));
+            }
+          }, 8000);
+
+          const interval = setInterval(() => {
+            const current = peers.get(peerId);
+            if (current && current.conn && current.conn.open) {
+              clearInterval(interval);
+              clearTimeout(timeout);
+              resolve(current.conn);
+            }
+          }, 150);
+        });
+      }
+
+      async function sendSingleFile(peerId, file, fileIndex = 1, totalFiles = 1) {
+        console.log(`[Mobile Transfer] Preparing to send ${file.name} to ${peerId}`);
+        const conn = await ensurePeerConnectionOpen(peerId);
+
         const transferId = crypto.randomUUID();
+        const headerPacket = {
+          type: 'header',
+          transferId: transferId,
+          name: file.name,
+          size: file.size,
+          mimeType: file.type,
+          fileIndex: fileIndex,
+          totalFiles: totalFiles
+        };
+
+        console.log(`[Mobile Transfer] Dispatching header packet to ${peerId}:`, headerPacket, 'Conn open:', conn.open);
 
         return new Promise((resolve, reject) => {
           currentOutgoingTransfer = {
@@ -1555,16 +1609,11 @@
             reject
           };
 
-          // Send Header
-          sendControl(conn, {
-            type: 'header',
-            transferId: transferId,
-            name: file.name,
-            size: file.size,
-            mimeType: file.type,
-            fileIndex: fileIndex,
-            totalFiles: totalFiles
-          });
+          const sent = sendControl(conn, headerPacket);
+          if (!sent) {
+            currentOutgoingTransfer = null;
+            return reject(new Error('Failed to dispatch transfer header through DataChannel'));
+          }
 
           const countPrefix = totalFiles > 1 ? `(${fileIndex}/${totalFiles}) ` : '';
           showToast(`Sending ${countPrefix}${file.name}...`);
