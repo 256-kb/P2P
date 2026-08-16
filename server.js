@@ -7,13 +7,15 @@ const crypto = require('crypto');
 const PORT = 8787;
 const sessions = new Map(); // socket -> metadata
 
+const HEARTBEAT_INTERVAL_MS = 10000;
+const SESSION_TIMEOUT_MS = 30000;
+
 const server = http.createServer((req, res) => {
   if (req.url === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-    return res.end(JSON.stringify({ status: 'ok' }));
+    return res.end(JSON.stringify({ status: 'ok', activeSessions: sessions.size }));
   }
 
-  // Sert le fichier client/index.html
   const filePath = path.join(__dirname, 'client', 'index.html');
   fs.readFile(filePath, (err, data) => {
     if (err) {
@@ -53,11 +55,13 @@ server.on('upgrade', (req, socket, head) => {
     name: 'Device',
     device: { type: 'desktop', os: 'Unknown', browser: 'Browser' },
     room: roomParam,
-    joined: false
+    joined: false,
+    lastSeen: Date.now()
   };
   sessions.set(socket, session);
 
   socket.on('data', (buffer) => {
+    session.lastSeen = Date.now();
     try {
       const message = decodeWebSocketFrame(buffer);
       if (!message) return;
@@ -70,6 +74,24 @@ server.on('upgrade', (req, socket, head) => {
   socket.on('close', () => handleDisconnect(session));
   socket.on('error', () => handleDisconnect(session));
 });
+
+// Watchdog de purge des sockets inactifs (ex: mobile éteint sans TCP FIN)
+setInterval(() => {
+  const now = Date.now();
+  for (const [socket, session] of sessions.entries()) {
+    if (now - session.lastSeen > SESSION_TIMEOUT_MS) {
+      console.log(`[Watchdog] Terminating stale session for ${session.name} (${session.peerId})`);
+      sessions.delete(socket);
+      try { socket.destroy(); } catch(e) {}
+      if (session.joined) {
+        broadcastInRoom(session.room, { type: 'peer-left', peerId: session.peerId }, session);
+      }
+    } else if (session.joined) {
+      // Envoyer un ping de contrôle
+      sendWs(socket, { type: 'ping', timestamp: now });
+    }
+  }
+}, HEARTBEAT_INTERVAL_MS);
 
 function getUniqueNameInRoom(room, baseName, excludeSession = null) {
   const existingNames = new Set();
@@ -95,7 +117,7 @@ function handleMessage(session, data) {
     case 'join': {
       const requestedId = data.peerId || session.peerId;
       
-      // Fermer proprement toute session antérieure ayant le même peerId
+      // Fermer toute ancienne socket fantôme ayant le même peerId
       for (const [sSocket, sData] of sessions) {
         if (sData !== session && sData.peerId === requestedId) {
           sessions.delete(sSocket);
@@ -108,8 +130,8 @@ function handleMessage(session, data) {
       session.name = getUniqueNameInRoom(session.room, requestedName, session);
       session.device = data.device || session.device;
       session.joined = true;
+      session.lastSeen = Date.now();
 
-      // 1. Lister tous les autres pairs actuellement dans le salon
       const peersInRoom = [];
       for (const [_, s] of sessions) {
         if (s !== session && s.joined && s.room === session.room) {
@@ -121,7 +143,6 @@ function handleMessage(session, data) {
         }
       }
 
-      // 2. Répondre au nouveau pair avec son état confirmé et la liste des pairs
       sendWs(session.socket, {
         type: 'joined',
         peerId: session.peerId,
@@ -129,7 +150,6 @@ function handleMessage(session, data) {
         peers: peersInRoom
       });
 
-      // 3. Diffuser IMMÉDIATEMENT l'arrivée du pair à tous les autres clients du salon
       broadcastInRoom(
         session.room,
         {
@@ -145,8 +165,31 @@ function handleMessage(session, data) {
       break;
     }
 
+    case 'sync': {
+      // Re-synchronisation demandée par un mobile au réveil
+      session.lastSeen = Date.now();
+      const peersInRoom = [];
+      for (const [_, s] of sessions) {
+        if (s !== session && s.joined && s.room === session.room) {
+          peersInRoom.push({
+            peerId: s.peerId,
+            name: s.name,
+            device: s.device
+          });
+        }
+      }
+
+      sendWs(session.socket, {
+        type: 'sync-result',
+        peerId: session.peerId,
+        assignedName: session.name,
+        peers: peersInRoom
+      });
+      break;
+    }
+
     case 'signal': {
-      // Relai WebRTC : Offer, Answer, ICE Candidate vers le pair cible
+      session.lastSeen = Date.now();
       const { target, signal } = data;
       if (!target || !signal) break;
 
@@ -164,7 +207,13 @@ function handleMessage(session, data) {
     }
 
     case 'ping': {
+      session.lastSeen = Date.now();
       sendWs(session.socket, { type: 'pong', timestamp: Date.now() });
+      break;
+    }
+
+    case 'pong': {
+      session.lastSeen = Date.now();
       break;
     }
   }

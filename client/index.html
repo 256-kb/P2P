@@ -141,7 +141,7 @@
       background: var(--surface-hover);
     }
 
-    /* Room LED: White (Disconnected), Green (Connected) */
+    /* Room LED: White (Disconnected/Reconnecting), Green (Connected) */
     .status-dot {
       width: 7px;
       height: 7px;
@@ -295,7 +295,7 @@
       border-radius: 10px;
       transform: translate(-50%, -50%);
       z-index: 7;
-      animation: peerFadeIn 0.25s ease forwards;
+      animation: peerFadeIn 0.2s ease forwards;
     }
 
     @keyframes peerFadeIn {
@@ -611,7 +611,7 @@
         <span class="self-badge">You</span>
       </div>
       <div class="node-title" id="selfDisplayName">Initializing...</div>
-      <div class="node-subtitle" id="selfDeviceDetails">Waiting</div>
+      <div class="node-subtitle" id="selfDeviceDetails">Connecting...</div>
     </div>
 
     <!-- Peer Nodes Layer -->
@@ -688,6 +688,9 @@
       const CHUNK_SIZE = 64 * 1024;
       const BUFFER_HIGH = 1024 * 1024;
       const BUFFER_LOW = 256 * 1024;
+      const HEARTBEAT_INTERVAL_MS = 10000; // Send ping every 10s
+      const HEARTBEAT_TIMEOUT_MS = 25000;  // Force reconnect if no server activity for 25s
+
       const STUN_SERVERS = {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
@@ -720,8 +723,9 @@
       let currentTheme = localStorage.getItem('snapdrop_theme') || 'dark';
 
       let ws = null;
-      let pingTimer = null;
-      const peers = new Map(); // peerId -> { peerId, name, device, pc, dataChannel, iceQueue, dcResolvers, sendQueue }
+      let heartbeatTimer = null;
+      let lastServerMessageTime = Date.now();
+      const peers = new Map(); // peerId -> peer state
       let targetPeerForUpload = null;
       const activeTransfers = new Map();
       let pendingIncomingTransfer = null;
@@ -761,6 +765,7 @@
         setupDragAndDrop();
         setupModals();
         setupThemeToggle();
+        setupLifecycleListeners();
       }
 
       function setupThemeToggle() {
@@ -813,7 +818,7 @@
         peer.iceQueue = [];
         peer.sendQueue = [];
         if (peer.dcResolvers) {
-          peer.dcResolvers.forEach(r => r.reject(new Error('Peer cleaned up')));
+          peer.dcResolvers.forEach(r => r.reject(new Error('Peer connection closed')));
           peer.dcResolvers = [];
         }
       }
@@ -826,12 +831,43 @@
         renderPeers();
       }
 
-      // --- WebSocket Signaling with Instant Room Synchronization ---
+      // --- Mobile / Tab Lifecycle & Aggressive Reconnection ---
+      function setupLifecycleListeners() {
+        // App resumed from background (e.g. mobile unlock or tab switch)
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') {
+            console.log('[Lifecycle] App resumed to foreground. Checking sync...');
+            checkAndSyncConnection();
+          }
+        });
+
+        // Network reconnected (e.g. Wi-Fi toggle)
+        window.addEventListener('online', () => {
+          console.log('[Lifecycle] Network came online.');
+          checkAndSyncConnection();
+        });
+
+        window.addEventListener('focus', () => {
+          checkAndSyncConnection();
+        });
+      }
+
+      function checkAndSyncConnection() {
+        if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+          initWebSocket();
+        } else if (ws.readyState === WebSocket.OPEN) {
+          // Send instant sync request to ensure peer list is fresh
+          lastServerMessageTime = Date.now();
+          ws.send(JSON.stringify({ type: 'sync' }));
+        }
+      }
+
+      // --- WebSocket Signaling with Ping/Pong Heartbeat & Watchdog ---
       function initWebSocket() {
         if (ws) {
           try { ws.onclose = null; ws.close(); } catch(e) {}
         }
-        clearInterval(pingTimer);
+        clearInterval(heartbeatTimer);
         cleanupAllConnections();
 
         const url = new URL(wsServerUrl, window.location.href);
@@ -839,6 +875,7 @@
 
         statusDot.className = 'status-dot';
         selfDeviceDetails.textContent = 'Connecting...';
+        lastServerMessageTime = Date.now();
 
         try {
           ws = new WebSocket(url.toString());
@@ -850,8 +887,10 @@
         ws.onopen = () => {
           statusDot.className = 'status-dot connected';
           selfDeviceDetails.textContent = 'Online';
+          lastServerMessageTime = Date.now();
           showToast(`Connected to room #${roomId}`);
 
+          // Register with room
           ws.send(JSON.stringify({
             type: 'join',
             peerId: selfPeerId,
@@ -859,15 +898,25 @@
             device: selfDevice
           }));
 
-          // Keep-alive ping
-          pingTimer = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: 'ping' }));
+          // Heartbeat Ping & Stale Watchdog
+          heartbeatTimer = setInterval(() => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+            // Watchdog check: If no message or pong for > 25s, socket is silently dead (common on mobile background sleep)
+            if (Date.now() - lastServerMessageTime > HEARTBEAT_TIMEOUT_MS) {
+              console.warn('[Heartbeat] Server unresponsive. Forcing reconnect...');
+              try { ws.close(); } catch(e) {}
+              initWebSocket();
+              return;
             }
-          }, 25000);
+
+            // Send ping
+            ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+          }, HEARTBEAT_INTERVAL_MS);
         };
 
         ws.onmessage = (e) => {
+          lastServerMessageTime = Date.now();
           try {
             const data = JSON.parse(e.data);
             handleSignalingMessage(data);
@@ -879,7 +928,9 @@
         ws.onclose = () => {
           statusDot.className = 'status-dot';
           selfDeviceDetails.textContent = 'Offline';
-          clearInterval(pingTimer);
+          clearInterval(heartbeatTimer);
+          
+          // Reconnect with 2.5s backoff
           setTimeout(() => {
             if (ws && ws.readyState === WebSocket.CLOSED) {
               initWebSocket();
@@ -890,8 +941,23 @@
 
       function handleSignalingMessage(data) {
         switch (data.type) {
-          case 'joined': {
-            selfPeerId = data.peerId;
+          case 'pong': {
+            // Heartbeat acknowledged
+            lastServerMessageTime = Date.now();
+            break;
+          }
+
+          case 'ping': {
+            // Server-initiated ping -> reply immediately with pong
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+            }
+            break;
+          }
+
+          case 'joined':
+          case 'sync-result': {
+            selfPeerId = data.peerId || selfPeerId;
             sessionStorage.setItem('snapdrop_peer_id', selfPeerId);
 
             if (data.assignedName && data.assignedName !== selfName) {
@@ -900,10 +966,10 @@
               selfDisplayName.textContent = selfName;
             }
 
-            // Sync peer list from server
+            // Sync peer list
             const incomingIds = new Set((data.peers || []).map(p => p.peerId));
             
-            // Remove peers that are no longer in room
+            // Remove peers that have disconnected
             for (const [id, peer] of peers.entries()) {
               if (!incomingIds.has(id)) {
                 cleanupPeer(peer);
@@ -918,7 +984,6 @@
           }
 
           case 'peer-joined': {
-            // New peer joined the room -> INSTANT UI update
             if (data.peer && data.peer.peerId !== selfPeerId) {
               addOrUpdatePeer(data.peer);
               renderPeers();
@@ -928,7 +993,6 @@
           }
 
           case 'peer-left': {
-            // Peer disconnected -> INSTANT UI update
             if (data.peerId) {
               const p = peers.get(data.peerId);
               if (p) {
@@ -1017,7 +1081,7 @@
         });
       }
 
-      // --- WebRTC Robust State Machine & Asymmetric Negotiation ---
+      // --- WebRTC State Machine & Negotiation ---
       function getOrCreatePC(peerId) {
         let peer = peers.get(peerId);
         if (!peer) return null;
@@ -1067,13 +1131,11 @@
         dc.onopen = () => {
           console.log(`[WebRTC] DataChannel OPEN with ${peer.name}`);
           
-          // Resolve any pending wait promises
           if (peer.dcResolvers && peer.dcResolvers.length > 0) {
             peer.dcResolvers.forEach(r => r.resolve(dc));
             peer.dcResolvers = [];
           }
 
-          // Flush queued control messages
           if (peer.sendQueue && peer.sendQueue.length > 0) {
             while (peer.sendQueue.length > 0) {
               const msg = peer.sendQueue.shift();
@@ -1108,7 +1170,6 @@
 
         const pc = getOrCreatePC(peerId);
 
-        // If no data channel exists, create one
         if (!peer.dataChannel || peer.dataChannel.readyState === 'closed') {
           const dc = pc.createDataChannel('p2p-transfer', { ordered: true });
           setupDataChannel(peerId, dc);
@@ -1122,12 +1183,11 @@
             const idx = peer.dcResolvers.indexOf(resolverObj);
             if (idx !== -1) {
               peer.dcResolvers.splice(idx, 1);
-              reject(new Error('Connection timed out. Please ensure both devices are online and retry.'));
+              reject(new Error('Connection timed out. Please ensure both devices are active and retry.'));
             }
           }, 12000);
 
           try {
-            // Trigger SDP offer if stable
             if (pc.signalingState === 'stable') {
               peer.isMakingOffer = true;
               const offer = await pc.createOffer();
@@ -1159,7 +1219,6 @@
           if (signal.type === 'offer') {
             const isCollision = peer.isMakingOffer || pc.signalingState !== 'stable';
             
-            // Polite collision handling: resolve state before accepting incoming offer
             if (isCollision) {
               await Promise.all([
                 pc.setLocalDescription({ type: 'rollback' }).catch(() => {}),
@@ -1169,7 +1228,6 @@
               await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
             }
 
-            // Flush queued remote ICE candidates
             while (peer.iceQueue.length > 0) {
               const cand = peer.iceQueue.shift();
               await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
@@ -1190,7 +1248,6 @@
             if (pc.signalingState === 'have-local-offer') {
               await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
 
-              // Flush queued remote ICE candidates
               while (peer.iceQueue.length > 0) {
                 const cand = peer.iceQueue.shift();
                 await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});

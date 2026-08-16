@@ -30,6 +30,7 @@ export class SignalingRoom {
       name: "Device",
       device: { type: "desktop", os: "Unknown", browser: "Browser" },
       joined: false,
+      lastSeen: Date.now()
     });
 
     return new Response(null, {
@@ -63,6 +64,8 @@ export class SignalingRoom {
       const session = this.sessions.get(ws);
       if (!session) return;
 
+      session.lastSeen = Date.now();
+
       switch (data.type) {
         case "join": {
           const requestedId = data.peerId || session.peerId || crypto.randomUUID();
@@ -80,8 +83,8 @@ export class SignalingRoom {
           session.name = this.getUniqueName(requestedName, ws);
           session.device = data.device || { type: "desktop", os: "Unknown", browser: "Browser" };
           session.joined = true;
+          session.lastSeen = Date.now();
 
-          // 1. Collecter tous les pairs existants
           const existingPeers = [];
           for (const [peerWs, peerSession] of this.sessions.entries()) {
             if (peerWs !== ws && peerSession.joined) {
@@ -93,7 +96,6 @@ export class SignalingRoom {
             }
           }
 
-          // 2. Confirmer la connexion et envoyer la liste des pairs au nouveau venu
           this.safeSend(ws, {
             type: "joined",
             peerId: session.peerId,
@@ -101,7 +103,6 @@ export class SignalingRoom {
             peers: existingPeers,
           });
 
-          // 3. Diffuser INSTANTANÉMENT l'arrivée du pair à tous les autres clients
           this.broadcast(
             {
               type: "peer-joined",
@@ -113,6 +114,29 @@ export class SignalingRoom {
             },
             ws
           );
+          break;
+        }
+
+        case "sync": {
+          // Re-synchronisation pour les appareils sortant de veille
+          session.lastSeen = Date.now();
+          const existingPeers = [];
+          for (const [peerWs, peerSession] of this.sessions.entries()) {
+            if (peerWs !== ws && peerSession.joined) {
+              existingPeers.push({
+                peerId: peerSession.peerId,
+                name: peerSession.name,
+                device: peerSession.device,
+              });
+            }
+          }
+
+          this.safeSend(ws, {
+            type: "sync-result",
+            peerId: session.peerId,
+            assignedName: session.name,
+            peers: existingPeers,
+          });
           break;
         }
 
@@ -132,7 +156,13 @@ export class SignalingRoom {
         }
 
         case "ping": {
+          session.lastSeen = Date.now();
           this.safeSend(ws, { type: "pong", timestamp: Date.now() });
+          break;
+        }
+
+        case "pong": {
+          session.lastSeen = Date.now();
           break;
         }
       }
