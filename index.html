@@ -866,16 +866,38 @@
       const BUFFER_HIGH = 1024 * 1024;
       const BUFFER_LOW = 256 * 1024;
       const HEARTBEAT_INTERVAL_MS = 6000;
-      const PEER_STALE_TIMEOUT_MS = 20000;
-
-      const STUN_CONFIG = {
+      const RTC_CONFIG = {
         iceServers: [
+          // STUN Servers (Google & Twilio)
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
           { urls: 'stun:stun2.l.google.com:19302' },
-          { urls: 'stun:global.stun.twilio.com:3478' }
+          { urls: 'stun:global.stun.twilio.com:3478' },
+          { urls: 'stun:stun.relay.metered.ca:80' },
+          // Free Public TURN Relay Servers (Metered OpenRelay Project - UDP & TCP 80/443 for cellular/NAT traversal)
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          },
+          {
+            urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+          }
         ],
-        iceCandidatePoolSize: 10
+        iceCandidatePoolSize: 10,
+        iceTransportPolicy: 'all'
       };
 
       const ANIMALS = ['Falcon', 'Fox', 'Lynx', 'Otter', 'Eagle', 'Panther', 'Wolf', 'Dolphin', 'Tiger', 'Panda', 'Hawk', 'Badger'];
@@ -1006,7 +1028,7 @@
 
       function tryHostInitialization() {
         const hostPeer = new Peer(hostPeerId, {
-          config: STUN_CONFIG,
+          config: RTC_CONFIG,
           debug: 0
         });
 
@@ -1036,7 +1058,7 @@
         isHost = false;
         const clientId = `${roomPrefix}_${crypto.randomUUID().slice(0, 8)}`;
         const clientPeer = new Peer(clientId, {
-          config: STUN_CONFIG,
+          config: RTC_CONFIG,
           debug: 0
         });
 
@@ -1130,8 +1152,7 @@
 
         try {
           const conn = peerInstance.connect(targetId, {
-            reliable: true,
-            serialization: 'raw'
+            reliable: true
           });
           setupConnection(conn, isHostTarget);
         } catch(e) {
@@ -1140,6 +1161,17 @@
       }
 
       function setupConnection(conn, isHostTarget = false) {
+        if (conn.peerConnection) {
+          conn.peerConnection.oniceconnectionstatechange = () => {
+            const state = conn.peerConnection.iceConnectionState;
+            console.log(`[ICE] state with ${conn.peer}:`, state);
+            if (state === 'failed') {
+              console.warn('[ICE] Connection failed. Restarting ICE with TURN relay...');
+              try { conn.peerConnection.restartIce(); } catch(e) {}
+            }
+          };
+        }
+
         conn.on('open', () => {
           const targetId = conn.peer;
           
@@ -1214,6 +1246,7 @@
 
         conn.on('error', (err) => {
           console.warn('[PeerJS] Conn error with', conn.peer, err);
+          appendSystemMessage(`Connection error with peer: ${err.message || err.type || 'disconnected'}`);
         });
       }
 
@@ -1238,15 +1271,19 @@
         let peer = peers.get(peerId);
         if (peer) peer.lastSeen = Date.now();
 
-        if (typeof data === 'object' && data !== null && !(data instanceof ArrayBuffer)) {
+        if (data instanceof ArrayBuffer && pendingIncomingTransfer) {
+          handleBinaryChunk(peerId, data);
+        } else if (data instanceof Uint8Array && pendingIncomingTransfer) {
+          handleBinaryChunk(peerId, data.buffer);
+        } else if (data instanceof Blob && pendingIncomingTransfer) {
+          data.arrayBuffer().then(buf => handleBinaryChunk(peerId, buf));
+        } else if (typeof data === 'object' && data !== null && !(data instanceof ArrayBuffer) && !(data instanceof Uint8Array)) {
           handleControlMessage(peerId, data);
         } else if (typeof data === 'string') {
           try {
             const msg = JSON.parse(data);
             handleControlMessage(peerId, msg);
           } catch(e) {}
-        } else if (data instanceof ArrayBuffer && pendingIncomingTransfer) {
-          handleBinaryChunk(peerId, data);
         }
       }
 
