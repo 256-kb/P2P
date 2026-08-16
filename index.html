@@ -9,18 +9,18 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
 
-  <title>P2P — Serverless &amp; Encrypted File Transfer</title>
-  <meta name="description" content="Private, fast, peer-to-peer file and folder sharing directly between devices over WebRTC with End-to-End Encryption." />
+  <title>P2P — Serverless PeerJS File &amp; Folder Transfer</title>
+  <meta name="description" content="Private, fast, peer-to-peer file and folder sharing directly between devices over PeerJS and WebRTC." />
   
   <!-- Monochrome Minimalist Favicon -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='black' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='11' fill='black'/><path d='M12 7v10' stroke='white'/><path d='m8 11 4-4 4 4' stroke='white'/></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.gstatic.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-  <!-- JSZip (Folder compression) & Paho MQTT (Serverless Public Signaling) -->
+  <!-- JSZip (Folder compression) & PeerJS (Reliable Serverless WebRTC Signaling) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
   <style>
     /* Theme Variables: Dark (Default) */
@@ -151,7 +151,7 @@
       background: var(--surface-hover);
     }
 
-    /* Room LED: White (Connecting/Offline), Green (Connected & Encrypted) */
+    /* Room LED: White (Connecting), Green (Connected & Ready) */
     .status-dot {
       width: 7px;
       height: 7px;
@@ -582,8 +582,8 @@
     </div>
 
     <div class="nav-actions">
-      <!-- Room Pill with LED & E2EE Lock Icon -->
-      <div class="pill-badge" id="roomBtn" title="Change or share Encrypted Room">
+      <!-- Room Pill with LED & Lock Icon -->
+      <div class="pill-badge" id="roomBtn" title="Change or share Secret Room">
         <div class="status-dot" id="statusDot"></div>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
         <span id="roomLabel">Room: #...</span>
@@ -605,7 +605,7 @@
       </button>
 
       <!-- Settings Button -->
-      <button class="icon-btn" id="settingsBtn" title="Settings &amp; Encryption Key">
+      <button class="icon-btn" id="settingsBtn" title="Settings &amp; Room Secret">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       </button>
     </div>
@@ -632,7 +632,7 @@
     <div class="peers-layer" id="peersLayer"></div>
 
     <div class="empty-state" id="emptyState">
-      <div>Share your secret room link with other devices</div>
+      <div>Share your secret room link with other devices to discover them</div>
     </div>
 
     <!-- Drag & Drop Overlay -->
@@ -679,7 +679,7 @@
   <div class="modal-backdrop" id="settingsModal">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 class="modal-title">Settings &amp; E2EE Key</h3>
+        <h3 class="modal-title">Settings &amp; Room Secret</h3>
         <button class="icon-btn" id="closeSettingsModal">&times;</button>
       </div>
       <div class="form-group">
@@ -687,11 +687,11 @@
         <input type="text" id="inputDeviceName" class="text-input" />
       </div>
       <div class="form-group">
-        <label class="form-label">Secret Room Key (in URL hash)</label>
-        <input type="text" id="inputRoomKey" class="text-input" placeholder="e.g. secret-xyz" />
+        <label class="form-label">Secret Room Key (URL Hash)</label>
+        <input type="text" id="inputRoomKey" class="text-input" placeholder="e.g. p2p-secret" />
       </div>
       <div style="font-size:0.72rem; color:var(--text-faint); line-height:1.3;">
-        🔒 All peer discovery and signaling packets are AES-256-GCM encrypted using this key. Only devices sharing this exact key can discover each other.
+        🔒 Only devices sharing this exact secret key in their URL hash can discover each other and transfer files.
       </div>
       <div class="btn-group">
         <button class="btn btn-ghost" id="copyShareLinkBtn">Copy Link</button>
@@ -724,16 +724,9 @@
       const BUFFER_HIGH = 1024 * 1024;
       const BUFFER_LOW = 256 * 1024;
       const HEARTBEAT_INTERVAL_MS = 6000;
-      const PEER_STALE_TIMEOUT_MS = 18000;
+      const PEER_STALE_TIMEOUT_MS = 20000;
 
-      // Public Global High-Availability Brokers (HiveMQ & EMQX)
-      const PUBLIC_BROKERS = [
-        { host: 'broker.hivemq.com', port: 8884, path: '/mqtt', ssl: true },
-        { host: 'broker.emqx.io', port: 8084, path: '/mqtt', ssl: true }
-      ];
-      let currentBrokerIndex = 0;
-
-      const STUN_SERVERS = {
+      const STUN_CONFIG = {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
@@ -758,29 +751,29 @@
         return `p2p-${rand}`;
       }
 
-      // --- URL Hash Secret & E2EE Key Derivation ---
+      // --- Room Hash & Partitioning ---
       let roomSecret = (window.location.hash || '').replace(/^#/, '').trim();
       if (!roomSecret) {
         roomSecret = generateSecretKey();
         window.location.hash = roomSecret;
       }
 
-      let cryptoAesKey = null;
-      let mqttTopic = '';
-
-      let selfPeerId = sessionStorage.getItem('snapdrop_peer_id') || crypto.randomUUID();
-      sessionStorage.setItem('snapdrop_peer_id', selfPeerId);
-
+      let selfPeerId = null;
       let selfName = sessionStorage.getItem('snapdrop_device_name') || generateRandomName();
       sessionStorage.setItem('snapdrop_device_name', selfName);
 
       let currentTheme = localStorage.getItem('snapdrop_theme') || 'dark';
 
-      let mqttClient = null;
+      let peerInstance = null;
+      let isHost = false;
+      let roomPrefix = '';
+      let hostPeerId = '';
       let heartbeatTimer = null;
       let stalePeerTimer = null;
-      const peers = new Map(); // peerId -> peerState
+      let reconnectTimer = null;
 
+      const peers = new Map(); // peerId -> { peerId, name, device, conn, lastSeen, isConnected }
+      
       // Queue state
       const sendQueue = [];
       let isSendingActive = false;
@@ -829,244 +822,399 @@
         roomLabel.textContent = `Key: #${roomSecret.slice(0, 10)}`;
         updateIcon(selfDeviceIcon, selfDevice.type);
 
-        await setupCryptography();
-        initMqttSignaling();
+        roomPrefix = await computeRoomPrefix(roomSecret);
+        hostPeerId = `${roomPrefix}_0`;
+
+        initPeerJS();
         setupDragAndDrop();
         setupModals();
         setupThemeToggle();
         setupLifecycleListeners();
       }
 
-      // --- Cryptography: AES-256-GCM + PBKDF2 ---
-      async function setupCryptography() {
+      async function computeRoomPrefix(secret) {
         const enc = new TextEncoder();
-        
-        // 1. Derive deterministic topic hash from secret
-        const topicBuffer = await crypto.subtle.digest('SHA-256', enc.encode('p2p-topic-salt-2026:' + roomSecret));
-        const topicHex = Array.from(new Uint8Array(topicBuffer)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 24);
-        mqttTopic = `p2p/room/${topicHex}`;
-
-        // 2. Derive AES-GCM-256 Key
-        const keyMaterial = await crypto.subtle.importKey(
-          'raw',
-          enc.encode(roomSecret),
-          { name: 'PBKDF2' },
-          false,
-          ['deriveKey']
-        );
-
-        cryptoAesKey = await crypto.subtle.deriveKey(
-          {
-            name: 'PBKDF2',
-            salt: enc.encode('p2p-aes-salt-2026'),
-            iterations: 100000,
-            hash: 'SHA-256'
-          },
-          keyMaterial,
-          { name: 'AES-GCM', length: 256 },
-          false,
-          ['encrypt', 'decrypt']
-        );
+        const buf = await crypto.subtle.digest('SHA-256', enc.encode('p2p-room-v2:' + secret));
+        const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+        return `p2p_${hex}`;
       }
 
-      async function encryptPacket(plainObj) {
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const encoded = new TextEncoder().encode(JSON.stringify(plainObj));
-        const ciphertext = await crypto.subtle.encrypt(
-          { name: 'AES-GCM', iv: iv },
-          cryptoAesKey,
-          encoded
-        );
-        const combined = new Uint8Array(iv.byteLength + ciphertext.byteLength);
-        combined.set(iv, 0);
-        combined.set(new Uint8Array(ciphertext), iv.byteLength);
-        return btoa(String.fromCharCode.apply(null, combined));
-      }
-
-      async function decryptPacket(base64Str) {
-        try {
-          const raw = atob(base64Str);
-          const bytes = new Uint8Array(raw.length);
-          for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-          const iv = bytes.slice(0, 12);
-          const data = bytes.slice(12);
-          const decrypted = await crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv: iv },
-            cryptoAesKey,
-            data
-          );
-          return JSON.parse(new TextDecoder().decode(decrypted));
-        } catch(e) {
-          // Packet from different key or corrupt
-          return null;
-        }
-      }
-
-      // --- Serverless MQTT Public Signaling ---
-      function initMqttSignaling() {
-        if (mqttClient) {
-          try { mqttClient.disconnect(); } catch(e) {}
+      // --- PeerJS Decentralized Mesh Initialization ---
+      function initPeerJS() {
+        if (peerInstance) {
+          try { peerInstance.destroy(); } catch(e) {}
         }
         clearInterval(heartbeatTimer);
         clearInterval(stalePeerTimer);
+        clearTimeout(reconnectTimer);
         cleanupAllConnections();
 
         statusDot.className = 'status-dot';
         selfDeviceDetails.textContent = 'Connecting...';
 
-        const broker = PUBLIC_BROKERS[currentBrokerIndex % PUBLIC_BROKERS.length];
-        const clientId = `p2p_${selfPeerId.slice(0, 8)}_${Math.floor(Math.random() * 10000)}`;
+        // Step 1: Attempt to claim the Host Anchor ID for this secret room
+        isHost = false;
+        tryHostInitialization();
+      }
 
-        mqttClient = new Paho.MQTT.Client(broker.host, broker.port, broker.path, clientId);
+      function tryHostInitialization() {
+        const hostPeer = new Peer(hostPeerId, {
+          config: STUN_CONFIG,
+          debug: 0
+        });
 
-        mqttClient.onConnectionLost = (responseObject) => {
-          statusDot.className = 'status-dot';
-          selfDeviceDetails.textContent = 'Reconnecting...';
-          console.warn('[MQTT] Connection lost:', responseObject.errorMessage);
-          currentBrokerIndex++;
-          setTimeout(initMqttSignaling, 2000);
-        };
+        hostPeer.on('open', (id) => {
+          isHost = true;
+          peerInstance = hostPeer;
+          selfPeerId = id;
+          console.log('[PeerJS] Room Anchor (Host) initialized:', id);
+          onPeerConnected();
+          setupPeerListeners(hostPeer);
+        });
 
-        mqttClient.onMessageArrived = async (message) => {
-          const payloadEncrypted = message.payloadString;
-          const data = await decryptPacket(payloadEncrypted);
-          if (data && data.senderId !== selfPeerId) {
-            handleSignalingMessage(data);
-          }
-        };
-
-        mqttClient.connect({
-          useSSL: broker.ssl,
-          timeout: 10,
-          keepAliveInterval: 30,
-          cleanSession: true,
-          onSuccess: () => {
-            statusDot.className = 'status-dot connected';
-            selfDeviceDetails.textContent = 'Encrypted & Online';
-            showToast(`Connected to secure room`);
-
-            mqttClient.subscribe(mqttTopic, { qos: 0 });
-
-            // Broadcast presence
-            broadcastSignaling({
-              type: 'presence',
-              senderId: selfPeerId,
-              name: selfName,
-              device: selfDevice,
-              timestamp: Date.now()
-            });
-
-            // Keepalive & Presence Broadcast
-            heartbeatTimer = setInterval(() => {
-              broadcastSignaling({
-                type: 'ping',
-                senderId: selfPeerId,
-                name: selfName,
-                device: selfDevice,
-                timestamp: Date.now()
-              });
-            }, HEARTBEAT_INTERVAL_MS);
-
-            // Stale Peer Purge Watchdog
-            stalePeerTimer = setInterval(() => {
-              const now = Date.now();
-              let changed = false;
-              for (const [id, p] of peers.entries()) {
-                if (now - p.lastSeen > PEER_STALE_TIMEOUT_MS) {
-                  cleanupPeer(p);
-                  peers.delete(id);
-                  changed = true;
-                  showToast(`${p.name} left`);
-                }
-              }
-              if (changed) renderPeers();
-            }, 5000);
-          },
-          onFailure: (err) => {
-            console.error('[MQTT] Connect failed on broker:', broker.host, err);
-            currentBrokerIndex++;
-            setTimeout(initMqttSignaling, 2500);
+        hostPeer.on('error', (err) => {
+          if (err.type === 'unavailable-id') {
+            // Anchor already exists -> Initialize as a client peer and connect to Anchor
+            hostPeer.destroy();
+            initClientPeer();
+          } else {
+            console.warn('[PeerJS] Host init error:', err);
+            hostPeer.destroy();
+            initClientPeer();
           }
         });
       }
 
-      async function broadcastSignaling(payload) {
-        if (!mqttClient || !mqttClient.isConnected()) return;
+      function initClientPeer() {
+        isHost = false;
+        const clientId = `${roomPrefix}_${crypto.randomUUID().slice(0, 8)}`;
+        const clientPeer = new Peer(clientId, {
+          config: STUN_CONFIG,
+          debug: 0
+        });
+
+        clientPeer.on('open', (id) => {
+          peerInstance = clientPeer;
+          selfPeerId = id;
+          console.log('[PeerJS] Client peer initialized:', id);
+          onPeerConnected();
+          setupPeerListeners(clientPeer);
+
+          // Connect to the room Host Anchor to announce presence and get directory
+          connectToPeer(hostPeerId, true);
+        });
+
+        clientPeer.on('error', (err) => {
+          console.error('[PeerJS] Client error:', err);
+          statusDot.className = 'status-dot';
+          selfDeviceDetails.textContent = 'Reconnecting...';
+          clearTimeout(reconnectTimer);
+          reconnectTimer = setTimeout(initPeerJS, 2500);
+        });
+      }
+
+      function onPeerConnected() {
+        statusDot.className = 'status-dot connected';
+        selfDeviceDetails.textContent = 'Online';
+        showToast('Connected to secret room');
+
+        // Heartbeat Ping & Directory Sync
+        heartbeatTimer = setInterval(() => {
+          if (!peerInstance || peerInstance.destroyed) return;
+
+          // Broadcast ping to all connected peers
+          broadcastControlMessage({
+            type: 'ping',
+            senderId: selfPeerId,
+            name: selfName,
+            device: selfDevice,
+            timestamp: Date.now()
+          });
+
+          // If client, ensure connection to host is alive
+          if (!isHost && !peers.has(hostPeerId)) {
+            connectToPeer(hostPeerId, true);
+          }
+        }, HEARTBEAT_INTERVAL_MS);
+
+        // Stale Peer Watchdog
+        stalePeerTimer = setInterval(() => {
+          const now = Date.now();
+          let changed = false;
+          for (const [id, p] of peers.entries()) {
+            if (now - p.lastSeen > PEER_STALE_TIMEOUT_MS) {
+              if (p.conn) { try { p.conn.close(); } catch(e) {} }
+              peers.delete(id);
+              changed = true;
+              showToast(`${p.name} left`);
+
+              // If host left, client tries to become host
+              if (id === hostPeerId && !isHost) {
+                console.log('[PeerJS] Host disconnected. Attempting failover...');
+                setTimeout(initPeerJS, 1000 + Math.random() * 2000);
+              }
+            }
+          }
+          if (changed) renderPeers();
+        }, 5000);
+      }
+
+      function setupPeerListeners(peer) {
+        // Incoming Data Connection from another peer
+        peer.on('connection', (conn) => {
+          setupConnection(conn);
+        });
+
+        peer.on('disconnected', () => {
+          statusDot.className = 'status-dot';
+          selfDeviceDetails.textContent = 'Disconnected';
+          try { peer.reconnect(); } catch(e) {}
+        });
+
+        peer.on('close', () => {
+          statusDot.className = 'status-dot';
+          selfDeviceDetails.textContent = 'Offline';
+        });
+      }
+
+      function connectToPeer(targetId, isHostTarget = false) {
+        if (!peerInstance || peerInstance.destroyed || targetId === selfPeerId) return;
+        if (peers.has(targetId) && peers.get(targetId).isConnected) return;
+
         try {
-          const encrypted = await encryptPacket(payload);
-          const message = new Paho.MQTT.Message(encrypted);
-          message.destinationName = mqttTopic;
-          message.qos = 0;
-          mqttClient.send(message);
+          const conn = peerInstance.connect(targetId, {
+            reliable: true,
+            serialization: 'raw'
+          });
+          setupConnection(conn, isHostTarget);
         } catch(e) {
-          console.error('[MQTT] Broadcast error:', e);
+          console.error('[PeerJS] Connect error to', targetId, e);
         }
       }
 
-      function handleSignalingMessage(data) {
-        const { type, senderId } = data;
-        if (!senderId || senderId === selfPeerId) return;
+      function setupConnection(conn, isHostTarget = false) {
+        conn.on('open', () => {
+          const targetId = conn.peer;
+          
+          let peer = peers.get(targetId);
+          if (!peer) {
+            peer = {
+              peerId: targetId,
+              name: 'Device',
+              device: { type: 'desktop', os: 'Device' },
+              conn: conn,
+              lastSeen: Date.now(),
+              isConnected: true
+            };
+            peers.set(targetId, peer);
+          } else {
+            peer.conn = conn;
+            peer.isConnected = true;
+            peer.lastSeen = Date.now();
+          }
 
-        let peer = peers.get(senderId);
-        if (!peer) {
-          peer = {
-            peerId: senderId,
-            name: data.name || 'Peer Device',
-            device: data.device || { type: 'desktop', os: 'Device' },
-            lastSeen: Date.now(),
-            pc: null,
-            dataChannel: null,
-            iceQueue: [],
-            dcResolvers: [],
-            sendQueue: [],
-            isMakingOffer: false
-          };
-          peers.set(senderId, peer);
-          renderPeers();
-          if (type === 'presence') {
-            showToast(`${peer.name} joined`);
-            // Reply with our presence so both discover each other instantly
-            broadcastSignaling({
-              type: 'pong',
-              senderId: selfPeerId,
-              targetId: senderId,
-              name: selfName,
-              device: selfDevice,
-              timestamp: Date.now()
+          // Send Greeting & Info
+          sendControl(conn, {
+            type: 'hello',
+            senderId: selfPeerId,
+            name: selfName,
+            device: selfDevice,
+            isHost: isHost
+          });
+
+          // If we are Host, send Directory to the newcomer and announce to existing peers
+          if (isHost) {
+            const peerList = [];
+            for (const [id, p] of peers.entries()) {
+              if (id !== targetId) {
+                peerList.push({ peerId: id, name: p.name, device: p.device });
+              }
+            }
+            sendControl(conn, {
+              type: 'directory',
+              peers: peerList
             });
+
+            // Announce to others
+            broadcastControlMessage({
+              type: 'peer-joined',
+              peer: { peerId: targetId, name: peer.name, device: peer.device }
+            }, targetId);
+          }
+
+          renderPeers();
+        });
+
+        conn.on('data', (data) => {
+          handleIncomingData(conn.peer, data);
+        });
+
+        conn.on('close', () => {
+          const targetId = conn.peer;
+          const p = peers.get(targetId);
+          if (p) {
+            p.isConnected = false;
+            peers.delete(targetId);
+            renderPeers();
+            showToast(`${p.name} left`);
+          }
+
+          if (targetId === hostPeerId && !isHost) {
+            setTimeout(initPeerJS, 1000 + Math.random() * 2000);
+          }
+        });
+
+        conn.on('error', (err) => {
+          console.warn('[PeerJS] Conn error with', conn.peer, err);
+        });
+      }
+
+      function sendControl(conn, msgObj) {
+        if (!conn || !conn.open) return;
+        try {
+          conn.send(JSON.stringify(msgObj));
+        } catch(e) {}
+      }
+
+      function broadcastControlMessage(msgObj, excludePeerId = null) {
+        const payload = JSON.stringify(msgObj);
+        for (const [id, p] of peers.entries()) {
+          if (id !== excludePeerId && p.conn && p.conn.open) {
+            try { p.conn.send(payload); } catch(e) {}
           }
         }
+      }
 
-        peer.lastSeen = Date.now();
-        if (data.name) peer.name = data.name;
-        if (data.device) peer.device = data.device;
+      function handleIncomingData(peerId, data) {
+        let peer = peers.get(peerId);
+        if (peer) peer.lastSeen = Date.now();
 
-        switch (type) {
-          case 'presence':
-          case 'ping':
-          case 'pong':
-            // Presence acknowledged
-            break;
+        // Control message (JSON String)
+        if (typeof data === 'string') {
+          try {
+            const msg = JSON.parse(data);
+            handleControlMessage(peerId, msg);
+          } catch(e) {}
+        }
+        // Binary Chunk (ArrayBuffer)
+        else if (data instanceof ArrayBuffer && pendingIncomingTransfer) {
+          handleBinaryChunk(peerId, data);
+        }
+      }
 
-          case 'leave':
-            cleanupPeer(peer);
-            peers.delete(senderId);
+      function handleControlMessage(peerId, msg) {
+        let peer = peers.get(peerId);
+
+        switch (msg.type) {
+          case 'hello': {
+            if (!peer) {
+              peer = {
+                peerId: peerId,
+                name: msg.name || 'Device',
+                device: msg.device || { type: 'desktop', os: 'Device' },
+                conn: null,
+                lastSeen: Date.now(),
+                isConnected: true
+              };
+              peers.set(peerId, peer);
+            } else {
+              peer.name = msg.name || peer.name;
+              peer.device = msg.device || peer.device;
+              peer.lastSeen = Date.now();
+            }
             renderPeers();
-            showToast(`${peer.name} left`);
+            showToast(`${peer.name} joined`);
             break;
+          }
 
-          case 'signal':
-            if (data.targetId === selfPeerId && data.signal) {
-              handlePeerSignal(senderId, data.signal);
+          case 'directory': {
+            // Received full directory from Host -> Connect to each peer directly
+            (msg.peers || []).forEach(p => {
+              if (p.peerId !== selfPeerId && !peers.has(p.peerId)) {
+                connectToPeer(p.peerId);
+              }
+            });
+            break;
+          }
+
+          case 'peer-joined': {
+            if (msg.peer && msg.peer.peerId !== selfPeerId && !peers.has(msg.peer.peerId)) {
+              connectToPeer(msg.peer.peerId);
             }
             break;
+          }
+
+          case 'ping': {
+            if (peer) {
+              peer.lastSeen = Date.now();
+              if (msg.name) peer.name = msg.name;
+              if (msg.device) peer.device = msg.device;
+            }
+            break;
+          }
+
+          case 'header': {
+            pendingIncomingTransfer = {
+              peerId: peerId,
+              meta: msg,
+              chunks: [],
+              receivedBytes: 0,
+              startTime: Date.now()
+            };
+
+            const countPrefix = msg.totalFiles > 1 ? `[${msg.fileIndex}/${msg.totalFiles}] ` : '';
+
+            if (autoAcceptBatchFromPeer === peerId && msg.fileIndex > 1) {
+              if (peer && peer.conn && peer.conn.open) {
+                sendControl(peer.conn, { type: 'accept', transferId: msg.transferId });
+              }
+              return;
+            }
+
+            document.getElementById('incomingDesc').innerHTML = `<strong>${escapeHtml(peer?.name || 'A peer')}</strong> wants to send:<br/><strong>${countPrefix}${escapeHtml(msg.name)}</strong> (${formatBytes(msg.size)})`;
+            document.getElementById('incomingPromptModal').classList.add('show');
+            break;
+          }
+        }
+      }
+
+      function handleBinaryChunk(peerId, chunk) {
+        if (!pendingIncomingTransfer) return;
+
+        pendingIncomingTransfer.chunks.push(chunk);
+        pendingIncomingTransfer.receivedBytes += chunk.byteLength;
+
+        const meta = pendingIncomingTransfer.meta;
+        const countPrefix = meta.totalFiles > 1 ? `(${meta.fileIndex}/${meta.totalFiles}) ` : '';
+        const percent = Math.min(100, Math.round((pendingIncomingTransfer.receivedBytes / meta.size) * 100));
+        updateHud(`Receiving ${countPrefix}`, meta.name, percent, pendingIncomingTransfer.receivedBytes, meta.size, pendingIncomingTransfer.startTime);
+
+        if (pendingIncomingTransfer.receivedBytes >= meta.size) {
+          const blob = new Blob(pendingIncomingTransfer.chunks, { type: meta.mimeType || 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = meta.name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+
+          showToast(`Received : ${meta.name}`);
+
+          if (meta.fileIndex === meta.totalFiles) {
+            autoAcceptBatchFromPeer = null;
+            setTimeout(() => transferHud.classList.remove('show'), 1200);
+          }
+
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+          pendingIncomingTransfer = null;
         }
       }
 
       // --- Dynamic Orbital UI Render ---
       function renderPeers() {
         peersLayer.innerHTML = '';
-        const list = Array.from(peers.values());
+        const list = Array.from(peers.values()).filter(p => p.peerId !== selfPeerId);
         emptyState.style.display = list.length === 0 ? 'flex' : 'none';
 
         if (list.length === 0) return;
@@ -1101,181 +1249,7 @@
         });
       }
 
-      // --- WebRTC State Machine with E2EE DataChannel ---
-      function getOrCreatePC(peerId) {
-        let peer = peers.get(peerId);
-        if (!peer) return null;
-
-        if (peer.pc && peer.pc.connectionState !== 'closed' && peer.pc.connectionState !== 'failed') {
-          return peer.pc;
-        }
-
-        cleanupPeer(peer);
-
-        const pc = new RTCPeerConnection(STUN_SERVERS);
-        peer.pc = pc;
-        peer.iceQueue = [];
-
-        pc.onicecandidate = (e) => {
-          if (e.candidate) {
-            broadcastSignaling({
-              type: 'signal',
-              senderId: selfPeerId,
-              targetId: peerId,
-              signal: { type: 'candidate', candidate: e.candidate }
-            });
-          }
-        };
-
-        pc.ondatachannel = (e) => {
-          setupDataChannel(peerId, e.channel);
-        };
-
-        pc.oniceconnectionstatechange = () => {
-          if (pc.iceConnectionState === 'failed') {
-            try { pc.restartIce(); } catch(e) {}
-          }
-        };
-
-        return pc;
-      }
-
-      function setupDataChannel(peerId, dc) {
-        const peer = peers.get(peerId);
-        if (!peer) return;
-
-        peer.dataChannel = dc;
-        dc.binaryType = 'arraybuffer';
-        dc.bufferedAmountLowThreshold = BUFFER_LOW;
-
-        dc.onopen = () => {
-          if (peer.dcResolvers && peer.dcResolvers.length > 0) {
-            peer.dcResolvers.forEach(r => r.resolve(dc));
-            peer.dcResolvers = [];
-          }
-
-          if (peer.sendQueue && peer.sendQueue.length > 0) {
-            while (peer.sendQueue.length > 0) {
-              const msg = peer.sendQueue.shift();
-              try {
-                dc.send(typeof msg === 'string' ? msg : JSON.stringify(msg));
-              } catch(e) {}
-            }
-          }
-        };
-
-        dc.onmessage = (e) => handleDataMessage(peerId, e.data);
-
-        dc.onclose = () => {
-          peer.dataChannel = null;
-        };
-      }
-
-      async function ensureDataChannelReady(peerId) {
-        const peer = peers.get(peerId);
-        if (!peer) throw new Error('Peer not found in room');
-
-        if (peer.dataChannel && peer.dataChannel.readyState === 'open') {
-          return peer.dataChannel;
-        }
-
-        const pc = getOrCreatePC(peerId);
-
-        if (!peer.dataChannel || peer.dataChannel.readyState === 'closed') {
-          const dc = pc.createDataChannel('p2p-transfer', { ordered: true });
-          setupDataChannel(peerId, dc);
-        }
-
-        return new Promise(async (resolve, reject) => {
-          const resolverObj = { resolve, reject };
-          peer.dcResolvers.push(resolverObj);
-
-          const timeout = setTimeout(() => {
-            const idx = peer.dcResolvers.indexOf(resolverObj);
-            if (idx !== -1) {
-              peer.dcResolvers.splice(idx, 1);
-              reject(new Error('Connection timed out. Please ensure both devices are active and retry.'));
-            }
-          }, 12000);
-
-          try {
-            if (pc.signalingState === 'stable') {
-              peer.isMakingOffer = true;
-              const offer = await pc.createOffer();
-              await pc.setLocalDescription(offer);
-
-              broadcastSignaling({
-                type: 'signal',
-                senderId: selfPeerId,
-                targetId: peerId,
-                signal: { type: 'offer', sdp: offer }
-              });
-            }
-          } catch(err) {
-            clearTimeout(timeout);
-            reject(err);
-          } finally {
-            peer.isMakingOffer = false;
-          }
-        });
-      }
-
-      async function handlePeerSignal(senderId, signal) {
-        const peer = peers.get(senderId);
-        if (!peer) return;
-
-        const pc = getOrCreatePC(senderId);
-
-        try {
-          if (signal.type === 'offer') {
-            const isCollision = peer.isMakingOffer || pc.signalingState !== 'stable';
-            
-            if (isCollision) {
-              await Promise.all([
-                pc.setLocalDescription({ type: 'rollback' }).catch(() => {}),
-                pc.setRemoteDescription(new RTCSessionDescription(signal.sdp))
-              ]);
-            } else {
-              await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-            }
-
-            while (peer.iceQueue.length > 0) {
-              const cand = peer.iceQueue.shift();
-              await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
-            }
-
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-
-            broadcastSignaling({
-              type: 'signal',
-              senderId: selfPeerId,
-              targetId: senderId,
-              signal: { type: 'answer', sdp: answer }
-            });
-
-          } else if (signal.type === 'answer') {
-            if (pc.signalingState === 'have-local-offer') {
-              await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-
-              while (peer.iceQueue.length > 0) {
-                const cand = peer.iceQueue.shift();
-                await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
-              }
-            }
-          } else if (signal.type === 'candidate') {
-            if (pc.remoteDescription && pc.remoteDescription.type) {
-              await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(() => {});
-            } else {
-              peer.iceQueue.push(signal.candidate);
-            }
-          }
-        } catch(err) {
-          console.error(`[WebRTC] Signal handling error:`, err);
-        }
-      }
-
-      // --- Robust Sequential Send Queue ---
+      // --- Sequential Transfer Queue ---
       function enqueueFilesToSend(peerId, filesList) {
         const arr = Array.from(filesList);
         const total = arr.length;
@@ -1310,27 +1284,29 @@
 
       async function sendSingleFile(peerId, file, fileIndex = 1, totalFiles = 1) {
         const peer = peers.get(peerId);
-        if (!peer) throw new Error('Peer is no longer connected');
+        if (!peer || !peer.conn || !peer.conn.open) {
+          throw new Error('Peer is not connected');
+        }
 
-        const dc = await ensureDataChannelReady(peerId);
+        const conn = peer.conn;
         const transferId = crypto.randomUUID();
 
         return new Promise((resolve, reject) => {
           let hasAccepted = false;
 
-          const messageHandler = (e) => {
-            if (typeof e.data === 'string') {
+          const messageHandler = (data) => {
+            if (typeof data === 'string') {
               try {
-                const msg = JSON.parse(e.data);
+                const msg = JSON.parse(data);
                 if (msg.transferId === transferId) {
                   if (msg.type === 'accept') {
                     hasAccepted = true;
-                    dc.removeEventListener('message', messageHandler);
-                    streamFileChunks(dc, file, transferId, fileIndex, totalFiles)
+                    conn.off('data', messageHandler);
+                    streamFileChunks(conn, file, transferId, fileIndex, totalFiles)
                       .then(resolve)
                       .catch(reject);
                   } else if (msg.type === 'decline') {
-                    dc.removeEventListener('message', messageHandler);
+                    conn.off('data', messageHandler);
                     reject(new Error('Peer declined transfer'));
                   }
                 }
@@ -1338,10 +1314,10 @@
             }
           };
 
-          dc.addEventListener('message', messageHandler);
+          conn.on('data', messageHandler);
 
           // Send Header
-          dc.send(JSON.stringify({
+          sendControl(conn, {
             type: 'header',
             transferId: transferId,
             name: file.name,
@@ -1349,40 +1325,45 @@
             mimeType: file.type,
             fileIndex: fileIndex,
             totalFiles: totalFiles
-          }));
+          });
 
           const countPrefix = totalFiles > 1 ? `(${fileIndex}/${totalFiles}) ` : '';
           showToast(`Sending ${countPrefix}${file.name}...`);
         });
       }
 
-      function streamFileChunks(dc, file, transferId, fileIndex, totalFiles) {
+      function streamFileChunks(conn, file, transferId, fileIndex, totalFiles) {
         return new Promise((resolve, reject) => {
           let offset = 0;
           const startTime = Date.now();
           const countPrefix = totalFiles > 1 ? `(${fileIndex}/${totalFiles}) ` : '';
+          const rawDataChannel = conn.dataChannel;
 
           function sliceNext() {
-            if (dc.readyState !== 'open') {
-              return reject(new Error('DataChannel closed during transfer'));
+            if (!conn.open) {
+              return reject(new Error('Connection closed during transfer'));
             }
 
             const slice = file.slice(offset, offset + CHUNK_SIZE);
             const reader = new FileReader();
 
             reader.onload = (e) => {
-              if (dc.readyState !== 'open') return reject(new Error('DataChannel disconnected'));
+              if (!conn.open) return reject(new Error('Connection disconnected'));
 
-              dc.send(e.target.result);
+              try {
+                conn.send(e.target.result);
+              } catch(err) {
+                return reject(err);
+              }
+
               offset += e.target.result.byteLength;
-
               const percent = Math.min(100, Math.round((offset / file.size) * 100));
               updateHud(`Sending ${countPrefix}`, file.name, percent, offset, file.size, startTime);
 
               if (offset < file.size) {
-                if (dc.bufferedAmount > BUFFER_HIGH) {
-                  dc.onbufferedamountlow = () => {
-                    dc.onbufferedamountlow = null;
+                if (rawDataChannel && rawDataChannel.bufferedAmount > BUFFER_HIGH) {
+                  rawDataChannel.onbufferedamountlow = () => {
+                    rawDataChannel.onbufferedamountlow = null;
                     sliceNext();
                   };
                 } else {
@@ -1405,66 +1386,6 @@
         });
       }
 
-      // --- Receiver Logic ---
-      function handleDataMessage(peerId, data) {
-        if (typeof data === 'string') {
-          try {
-            const msg = JSON.parse(data);
-            if (msg.type === 'header') {
-              pendingIncomingTransfer = {
-                peerId: peerId,
-                meta: msg,
-                chunks: [],
-                receivedBytes: 0,
-                startTime: Date.now()
-              };
-
-              const countPrefix = msg.totalFiles > 1 ? `[${msg.fileIndex}/${msg.totalFiles}] ` : '';
-
-              if (autoAcceptBatchFromPeer === peerId && msg.fileIndex > 1) {
-                const peer = peers.get(peerId);
-                if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
-                  peer.dataChannel.send(JSON.stringify({ type: 'accept', transferId: msg.transferId }));
-                }
-                return;
-              }
-
-              document.getElementById('incomingDesc').innerHTML = `<strong>${escapeHtml(peers.get(peerId)?.name || 'A peer')}</strong> wants to send:<br/><strong>${countPrefix}${escapeHtml(msg.name)}</strong> (${formatBytes(msg.size)})`;
-              document.getElementById('incomingPromptModal').classList.add('show');
-            }
-          } catch(e) {}
-        } else if (data instanceof ArrayBuffer && pendingIncomingTransfer) {
-          pendingIncomingTransfer.chunks.push(data);
-          pendingIncomingTransfer.receivedBytes += data.byteLength;
-
-          const meta = pendingIncomingTransfer.meta;
-          const countPrefix = meta.totalFiles > 1 ? `(${meta.fileIndex}/${meta.totalFiles}) ` : '';
-          const percent = Math.min(100, Math.round((pendingIncomingTransfer.receivedBytes / meta.size) * 100));
-          updateHud(`Receiving ${countPrefix}`, meta.name, percent, pendingIncomingTransfer.receivedBytes, meta.size, pendingIncomingTransfer.startTime);
-
-          if (pendingIncomingTransfer.receivedBytes >= meta.size) {
-            const blob = new Blob(pendingIncomingTransfer.chunks, { type: meta.mimeType || 'application/octet-stream' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = meta.name;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-
-            showToast(`Received : ${meta.name}`);
-
-            if (meta.fileIndex === meta.totalFiles) {
-              autoAcceptBatchFromPeer = null;
-              setTimeout(() => transferHud.classList.remove('show'), 1200);
-            }
-
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
-            pendingIncomingTransfer = null;
-          }
-        }
-      }
-
       // --- Folder Zipping & Directory Traversal ---
       async function handleFolderSelection(fileList, targetPeerId) {
         if (!fileList || fileList.length === 0) return;
@@ -1477,6 +1398,10 @@
         updateHud('Compressing', zipFileName, 0, 0, 100, Date.now());
 
         try {
+          if (typeof JSZip === 'undefined') {
+            throw new Error('JSZip library is loading. Please retry in a second.');
+          }
+
           const zip = new JSZip();
           for (let i = 0; i < fileList.length; i++) {
             const file = fileList[i];
@@ -1565,7 +1490,7 @@
           e.preventDefault();
           dropOverlay.classList.remove('active');
           
-          const list = Array.from(peers.values());
+          const list = Array.from(peers.values()).filter(p => p.peerId !== selfPeerId);
           if (!list.length) return showToast("No peers connected.");
           const target = selectedTargetPeer || list[0].peerId;
 
@@ -1607,22 +1532,14 @@
       function setupLifecycleListeners() {
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') {
-            if (!mqttClient || !mqttClient.isConnected()) {
-              initMqttSignaling();
-            } else {
-              broadcastSignaling({
-                type: 'presence',
-                senderId: selfPeerId,
-                name: selfName,
-                device: selfDevice,
-                timestamp: Date.now()
-              });
+            if (!peerInstance || peerInstance.destroyed || peerInstance.disconnected) {
+              initPeerJS();
             }
           }
         });
 
         window.addEventListener('online', () => {
-          initMqttSignaling();
+          initPeerJS();
         });
 
         window.addEventListener('hashchange', async () => {
@@ -1630,8 +1547,9 @@
           if (newSecret && newSecret !== roomSecret) {
             roomSecret = newSecret;
             roomLabel.textContent = `Key: #${roomSecret.slice(0, 10)}`;
-            await setupCryptography();
-            initMqttSignaling();
+            roomPrefix = await computeRoomPrefix(roomSecret);
+            hostPeerId = `${roomPrefix}_0`;
+            initPeerJS();
           }
         });
       }
@@ -1654,7 +1572,7 @@
         document.getElementById('settingsBtn').onclick = () => openSettings();
         document.getElementById('closeSettingsModal').onclick = () => document.getElementById('settingsModal').classList.remove('show');
 
-        document.getElementById('saveSettingsBtn').onclick = async () => {
+        document.getElementById('saveSettingsBtn').onclick = () => {
           const rawName = document.getElementById('inputDeviceName').value.trim();
           selfName = rawName || selfName;
           const rawKey = document.getElementById('inputRoomKey').value.trim() || roomSecret;
@@ -1670,7 +1588,7 @@
 
         document.getElementById('copyShareLinkBtn').onclick = () => {
           navigator.clipboard.writeText(window.location.href);
-          showToast('Encrypted room link copied!');
+          showToast('Secret room link copied!');
         };
 
         // Incoming Prompt
@@ -1679,8 +1597,8 @@
           if (pendingIncomingTransfer) {
             autoAcceptBatchFromPeer = pendingIncomingTransfer.peerId;
             const peer = peers.get(pendingIncomingTransfer.peerId);
-            if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
-              peer.dataChannel.send(JSON.stringify({ type: 'accept', transferId: pendingIncomingTransfer.meta.transferId }));
+            if (peer && peer.conn && peer.conn.open) {
+              sendControl(peer.conn, { type: 'accept', transferId: pendingIncomingTransfer.meta.transferId });
             }
           }
         };
@@ -1690,8 +1608,8 @@
           if (pendingIncomingTransfer) {
             autoAcceptBatchFromPeer = null;
             const peer = peers.get(pendingIncomingTransfer.peerId);
-            if (peer && peer.dataChannel && peer.dataChannel.readyState === 'open') {
-              peer.dataChannel.send(JSON.stringify({ type: 'decline', transferId: pendingIncomingTransfer.meta.transferId }));
+            if (peer && peer.conn && peer.conn.open) {
+              sendControl(peer.conn, { type: 'decline', transferId: pendingIncomingTransfer.meta.transferId });
             }
           }
           pendingIncomingTransfer = null;
@@ -1704,27 +1622,9 @@
         document.getElementById('settingsModal').classList.add('show');
       }
 
-      function cleanupPeer(peer) {
-        if (!peer) return;
-        if (peer.dataChannel) {
-          try { peer.dataChannel.close(); } catch(e) {}
-          peer.dataChannel = null;
-        }
-        if (peer.pc) {
-          try { peer.pc.close(); } catch(e) {}
-          peer.pc = null;
-        }
-        peer.iceQueue = [];
-        peer.sendQueue = [];
-        if (peer.dcResolvers) {
-          peer.dcResolvers.forEach(r => r.reject(new Error('Peer closed')));
-          peer.dcResolvers = [];
-        }
-      }
-
       function cleanupAllConnections() {
         for (const [_, p] of peers) {
-          cleanupPeer(p);
+          if (p.conn) { try { p.conn.close(); } catch(e) {} }
         }
         peers.clear();
         renderPeers();
