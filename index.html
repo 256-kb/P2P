@@ -362,11 +362,9 @@
     .drop-overlay.active {
       opacity: 1;
       pointer-events: all;
-    }
-
-    .empty-state {
+    }    .empty-state {
       position: absolute;
-      bottom: 24px;
+      bottom: 90px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -380,7 +378,7 @@
     /* Live Transfer HUD */
     .transfer-bar-container {
       position: fixed;
-      bottom: 20px;
+      bottom: 80px;
       left: 50%;
       transform: translateX(-50%) translateY(20px);
       width: 90%;
@@ -389,7 +387,7 @@
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 12px 16px;
-      z-index: 50;
+      z-index: 80;
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
@@ -432,14 +430,15 @@
     /* Minecraft-Style Minimalist Chat */
     .chat-widget {
       position: fixed;
-      bottom: 16px;
-      left: 16px;
-      width: 320px;
-      max-width: calc(100vw - 32px);
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 92%;
+      max-width: 480px;
       display: flex;
       flex-direction: column;
       gap: 6px;
-      z-index: 45;
+      z-index: 70;
       pointer-events: none;
     }
 
@@ -447,7 +446,7 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
-      max-height: 180px;
+      max-height: 140px;
       overflow-y: auto;
       scrollbar-width: none;
       pointer-events: all;
@@ -458,17 +457,19 @@
     }
 
     .chat-msg-line {
-      font-size: 0.8rem;
-      line-height: 1.35;
-      padding: 3px 8px;
-      border-radius: 4px;
-      background: rgba(0, 0, 0, 0.55);
+      font-size: 0.82rem;
+      line-height: 1.4;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(18, 18, 21, 0.85);
+      border: 1px solid rgba(39, 39, 42, 0.6);
       color: #f4f4f5;
-      backdrop-filter: blur(4px);
+      backdrop-filter: blur(8px);
       width: fit-content;
       max-width: 100%;
       word-break: break-word;
       animation: chatFadeIn 0.15s ease-out;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
     }
 
     @keyframes chatFadeIn {
@@ -477,18 +478,33 @@
     }
 
     [data-theme="light"] .chat-msg-line {
-      background: rgba(24, 24, 27, 0.75);
-      color: #ffffff;
+      background: rgba(244, 244, 245, 0.92);
+      border: 1px solid rgba(228, 228, 231, 0.9);
+      color: #09090b;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     }
 
     .chat-msg-author {
       font-weight: 600;
       color: #a1a1aa;
-      margin-right: 5px;
+      margin-right: 6px;
     }
 
     .chat-msg-line.self .chat-msg-author {
       color: #38bdf8;
+    }
+
+    [data-theme="light"] .chat-msg-line.self .chat-msg-author {
+      color: #0284c7;
+    }
+
+    .chat-msg-line.system {
+      color: #a1a1aa;
+      font-style: italic;
+      border: none;
+      background: transparent;
+      box-shadow: none;
+      padding: 1px 4px;
     }
 
     .chat-input-bar {
@@ -497,14 +513,16 @@
       gap: 6px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 2px 6px;
+      border-radius: 8px;
+      padding: 3px 8px;
       pointer-events: all;
-      transition: border-color 0.15s ease, background-color 0.15s ease;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
     }
 
     .chat-input-bar:focus-within {
       border-color: var(--text-faint);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
     }
 
     .chat-input {
@@ -514,8 +532,8 @@
       outline: none;
       color: var(--text);
       font-family: inherit;
-      font-size: 0.8rem;
-      padding: 5px 6px;
+      font-size: 0.85rem;
+      padding: 6px 4px;
     }
 
     .chat-input::placeholder {
@@ -527,7 +545,7 @@
       border: none;
       color: var(--text-muted);
       cursor: pointer;
-      padding: 4px 6px;
+      padding: 4px 8px;
       border-radius: 4px;
       display: flex;
       align-items: center;
@@ -1186,6 +1204,7 @@
             peers.delete(targetId);
             renderPeers();
             showToast(`${p.name} left`);
+            appendSystemMessage(`${p.name} left the room`);
           }
 
           if (targetId === hostPeerId && !isHost) {
@@ -1201,15 +1220,16 @@
       function sendControl(conn, msgObj) {
         if (!conn || !conn.open) return;
         try {
-          conn.send(JSON.stringify(msgObj));
-        } catch(e) {}
+          conn.send(msgObj);
+        } catch(e) {
+          try { conn.send(JSON.stringify(msgObj)); } catch(err) {}
+        }
       }
 
       function broadcastControlMessage(msgObj, excludePeerId = null) {
-        const payload = JSON.stringify(msgObj);
         for (const [id, p] of peers.entries()) {
           if (id !== excludePeerId && p.conn && p.conn.open) {
-            try { p.conn.send(payload); } catch(e) {}
+            sendControl(p.conn, msgObj);
           }
         }
       }
@@ -1218,15 +1238,14 @@
         let peer = peers.get(peerId);
         if (peer) peer.lastSeen = Date.now();
 
-        // Control message (JSON String)
-        if (typeof data === 'string') {
+        if (typeof data === 'object' && data !== null && !(data instanceof ArrayBuffer)) {
+          handleControlMessage(peerId, data);
+        } else if (typeof data === 'string') {
           try {
             const msg = JSON.parse(data);
             handleControlMessage(peerId, msg);
           } catch(e) {}
-        }
-        // Binary Chunk (ArrayBuffer)
-        else if (data instanceof ArrayBuffer && pendingIncomingTransfer) {
+        } else if (data instanceof ArrayBuffer && pendingIncomingTransfer) {
           handleBinaryChunk(peerId, data);
         }
       }
@@ -1253,6 +1272,7 @@
             }
             renderPeers();
             showToast(`${peer.name} joined`);
+            appendSystemMessage(`${peer.name} joined the room`);
             break;
           }
 
@@ -1770,6 +1790,19 @@
             }
           }
         });
+      }
+
+      function appendSystemMessage(text) {
+        if (!chatMessages) return;
+        const line = document.createElement('div');
+        line.className = 'chat-msg-line system';
+        line.textContent = `* ${text}`;
+        chatMessages.appendChild(line);
+
+        while (chatMessages.children.length > 40) {
+          chatMessages.removeChild(chatMessages.firstChild);
+        }
+        chatMessages.scrollTop = chatMessages.scrollHeight;
       }
 
       function appendChatMessage(author, text, isSelf = false) {
