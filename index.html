@@ -940,12 +940,11 @@
       const peers = new Map(); // peerId -> { peerId, name, device, conn, lastSeen, isConnected }
       const connectingPeers = new Set(); // Prevent concurrent connection race loops
       
-      // Queue state
+      // Sender & Receiver transfer state
       const sendQueue = [];
       let isSendingActive = false;
       let selectedTargetPeer = null;
-
-      // Receiver state
+      let currentOutgoingTransfer = null;
       let pendingIncomingTransfer = null;
       let autoAcceptBatchFromPeer = null;
 
@@ -1385,6 +1384,7 @@
 
           case 'header': {
             pendingIncomingTransfer = {
+              transferId: msg.transferId,
               peerId: peerId,
               meta: msg,
               chunks: [],
@@ -1405,14 +1405,36 @@
             document.getElementById('incomingPromptModal').classList.add('show');
             break;
           }
+
+          case 'accept': {
+            if (currentOutgoingTransfer && currentOutgoingTransfer.transferId === msg.transferId) {
+              const active = currentOutgoingTransfer;
+              currentOutgoingTransfer = null;
+              streamFileChunks(active.conn, active.file, active.transferId, active.fileIndex, active.totalFiles)
+                .then(active.resolve)
+                .catch(active.reject);
+            }
+            break;
+          }
+
+          case 'decline': {
+            if (currentOutgoingTransfer && currentOutgoingTransfer.transferId === msg.transferId) {
+              const active = currentOutgoingTransfer;
+              currentOutgoingTransfer = null;
+              active.reject(new Error('Peer declined transfer'));
+            }
+            break;
+          }
         }
       }
 
       function handleBinaryChunk(peerId, chunk) {
         if (!pendingIncomingTransfer) return;
+        if (pendingIncomingTransfer.peerId !== peerId) return;
 
+        const chunkSize = chunk.byteLength !== undefined ? chunk.byteLength : (chunk.size || 0);
         pendingIncomingTransfer.chunks.push(chunk);
-        pendingIncomingTransfer.receivedBytes += chunk.byteLength;
+        pendingIncomingTransfer.receivedBytes += chunkSize;
 
         const meta = pendingIncomingTransfer.meta;
         const countPrefix = meta.totalFiles > 1 ? `(${meta.fileIndex}/${meta.totalFiles}) ` : '';
@@ -1512,7 +1534,7 @@
         }
       }
 
-      async function sendSingleFile(peerId, file, fileIndex = 1, totalFiles = 1) {
+      function sendSingleFile(peerId, file, fileIndex = 1, totalFiles = 1) {
         const peer = peers.get(peerId);
         if (!peer || !peer.conn || !peer.conn.open) {
           throw new Error('Peer is not connected');
@@ -1522,29 +1544,16 @@
         const transferId = crypto.randomUUID();
 
         return new Promise((resolve, reject) => {
-          let hasAccepted = false;
-
-          const messageHandler = (data) => {
-            if (typeof data === 'string') {
-              try {
-                const msg = JSON.parse(data);
-                if (msg.transferId === transferId) {
-                  if (msg.type === 'accept') {
-                    hasAccepted = true;
-                    conn.off('data', messageHandler);
-                    streamFileChunks(conn, file, transferId, fileIndex, totalFiles)
-                      .then(resolve)
-                      .catch(reject);
-                  } else if (msg.type === 'decline') {
-                    conn.off('data', messageHandler);
-                    reject(new Error('Peer declined transfer'));
-                  }
-                }
-              } catch(err) {}
-            }
+          currentOutgoingTransfer = {
+            transferId,
+            peerId,
+            conn,
+            file,
+            fileIndex,
+            totalFiles,
+            resolve,
+            reject
           };
-
-          conn.on('data', messageHandler);
 
           // Send Header
           sendControl(conn, {
@@ -1827,8 +1836,9 @@
           if (pendingIncomingTransfer) {
             autoAcceptBatchFromPeer = pendingIncomingTransfer.peerId;
             const peer = peers.get(pendingIncomingTransfer.peerId);
-            if (peer && peer.conn && peer.conn.open) {
-              sendControl(peer.conn, { type: 'accept', transferId: pendingIncomingTransfer.meta.transferId });
+            const tid = pendingIncomingTransfer.transferId || pendingIncomingTransfer.meta?.transferId;
+            if (peer && peer.conn && peer.conn.open && tid) {
+              sendControl(peer.conn, { type: 'accept', transferId: tid });
             }
           }
         };
@@ -1838,8 +1848,9 @@
           if (pendingIncomingTransfer) {
             autoAcceptBatchFromPeer = null;
             const peer = peers.get(pendingIncomingTransfer.peerId);
-            if (peer && peer.conn && peer.conn.open) {
-              sendControl(peer.conn, { type: 'decline', transferId: pendingIncomingTransfer.meta.transferId });
+            const tid = pendingIncomingTransfer.transferId || pendingIncomingTransfer.meta?.transferId;
+            if (peer && peer.conn && peer.conn.open && tid) {
+              sendControl(peer.conn, { type: 'decline', transferId: tid });
             }
           }
           pendingIncomingTransfer = null;
