@@ -747,8 +747,8 @@
       }
 
       function generateSecretKey() {
-        const rand = crypto.randomUUID().replace(/-/g, '').slice(0, 8);
-        return `p2p-${rand}`;
+        // Generate a 10-digit random numeric key (1,000,000,000 to 9,999,999,999)
+        return Math.floor(1000000000 + Math.random() * 9000000000).toString();
       }
 
       // --- Room Hash & Partitioning ---
@@ -819,7 +819,7 @@
         applyTheme(currentTheme);
         selfDisplayName.textContent = selfName;
         selfDeviceDetails.textContent = selfDevice.os;
-        roomLabel.textContent = `Key: #${roomSecret.slice(0, 10)}`;
+        roomLabel.textContent = `Room: #${roomSecret}`;
         updateIcon(selfDeviceIcon, selfDevice.type);
 
         roomPrefix = await computeRoomPrefix(roomSecret);
@@ -1546,7 +1546,7 @@
           const newSecret = (window.location.hash || '').replace(/^#/, '').trim();
           if (newSecret && newSecret !== roomSecret) {
             roomSecret = newSecret;
-            roomLabel.textContent = `Key: #${roomSecret.slice(0, 10)}`;
+            roomLabel.textContent = `Room: #${roomSecret}`;
             roomPrefix = await computeRoomPrefix(roomSecret);
             hostPeerId = `${roomPrefix}_0`;
             initPeerJS();
