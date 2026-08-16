@@ -935,8 +935,10 @@
       let heartbeatTimer = null;
       let stalePeerTimer = null;
       let reconnectTimer = null;
+      let failoverTimer = null;
 
       const peers = new Map(); // peerId -> { peerId, name, device, conn, lastSeen, isConnected }
+      const connectingPeers = new Set(); // Prevent concurrent connection race loops
       
       // Queue state
       const sendQueue = [];
@@ -1106,7 +1108,7 @@
           }
         }, HEARTBEAT_INTERVAL_MS);
 
-        // Stale Peer Watchdog
+        // Stale Peer Watchdog (25s timeout for mobile background safety)
         stalePeerTimer = setInterval(() => {
           const now = Date.now();
           let changed = false;
@@ -1115,17 +1117,28 @@
               if (p.conn) { try { p.conn.close(); } catch(e) {} }
               peers.delete(id);
               changed = true;
-              showToast(`${p.name} left`);
+              showToast(`${p.name} timed out`);
+              appendSystemMessage(`${p.name} left the room`);
 
-              // If host left, client tries to become host
               if (id === hostPeerId && !isHost) {
-                console.log('[PeerJS] Host disconnected. Attempting failover...');
-                setTimeout(initPeerJS, 1000 + Math.random() * 2000);
+                debouncedFailover();
               }
             }
           }
           if (changed) renderPeers();
-        }, 5000);
+        }, 6000);
+      }
+
+      function debouncedFailover() {
+        if (isHost || failoverTimer) return;
+        console.log('[PeerJS] Scheduling host failover in 3.5s...');
+        failoverTimer = setTimeout(() => {
+          failoverTimer = null;
+          if (!isHost && !peers.has(hostPeerId)) {
+            console.log('[PeerJS] Executing host failover...');
+            initPeerJS();
+          }
+        }, 3500 + Math.random() * 2000);
       }
 
       function setupPeerListeners(peer) {
@@ -1148,7 +1161,14 @@
 
       function connectToPeer(targetId, isHostTarget = false) {
         if (!peerInstance || peerInstance.destroyed || targetId === selfPeerId) return;
-        if (peers.has(targetId) && peers.get(targetId).isConnected) return;
+        if (connectingPeers.has(targetId)) return;
+
+        const existing = peers.get(targetId);
+        if (existing && existing.conn && (existing.conn.open || existing.isConnected)) return;
+
+        connectingPeers.add(targetId);
+        // Safety release of connecting lock after 10s
+        setTimeout(() => connectingPeers.delete(targetId), 10000);
 
         try {
           const conn = peerInstance.connect(targetId, {
@@ -1156,11 +1176,22 @@
           });
           setupConnection(conn, isHostTarget);
         } catch(e) {
+          connectingPeers.delete(targetId);
           console.error('[PeerJS] Connect error to', targetId, e);
         }
       }
 
       function setupConnection(conn, isHostTarget = false) {
+        const targetId = conn.peer;
+
+        // If duplicate incoming connection arrives while already connected, drop redundant one
+        const existing = peers.get(targetId);
+        if (existing && existing.conn && existing.conn.open && existing.conn !== conn) {
+          console.log('[PeerJS] Redundant connection ignored with', targetId);
+          try { conn.close(); } catch(e) {}
+          return;
+        }
+
         if (conn.peerConnection) {
           conn.peerConnection.oniceconnectionstatechange = () => {
             const state = conn.peerConnection.iceConnectionState;
@@ -1173,8 +1204,8 @@
         }
 
         conn.on('open', () => {
-          const targetId = conn.peer;
-          
+          connectingPeers.delete(targetId);
+
           let peer = peers.get(targetId);
           if (!peer) {
             peer = {
@@ -1201,7 +1232,7 @@
             isHost: isHost
           });
 
-          // If we are Host, send Directory to the newcomer and announce to existing peers
+          // If we are Host, send Directory to newcomer and announce to existing peers
           if (isHost) {
             const peerList = [];
             for (const [id, p] of peers.entries()) {
@@ -1214,7 +1245,6 @@
               peers: peerList
             });
 
-            // Announce to others
             broadcastControlMessage({
               type: 'peer-joined',
               peer: { peerId: targetId, name: peer.name, device: peer.device }
@@ -1229,24 +1259,27 @@
         });
 
         conn.on('close', () => {
-          const targetId = conn.peer;
+          connectingPeers.delete(targetId);
+
           const p = peers.get(targetId);
-          if (p) {
+          // ONLY delete peer if this closing connection is actually the active one!
+          if (p && p.conn === conn) {
             p.isConnected = false;
             peers.delete(targetId);
             renderPeers();
             showToast(`${p.name} left`);
             appendSystemMessage(`${p.name} left the room`);
-          }
 
-          if (targetId === hostPeerId && !isHost) {
-            setTimeout(initPeerJS, 1000 + Math.random() * 2000);
+            // Debounced host failover to prevent simultaneous anchor collision
+            if (targetId === hostPeerId && !isHost) {
+              debouncedFailover();
+            }
           }
         });
 
         conn.on('error', (err) => {
+          connectingPeers.delete(targetId);
           console.warn('[PeerJS] Conn error with', conn.peer, err);
-          appendSystemMessage(`Connection error with peer: ${err.message || err.type || 'disconnected'}`);
         });
       }
 
@@ -1314,18 +1347,22 @@
           }
 
           case 'directory': {
-            // Received full directory from Host -> Connect to each peer directly
+            // Asymmetric connection rule: smaller peerId initiates connection to avoid race collision
             (msg.peers || []).forEach(p => {
-              if (p.peerId !== selfPeerId && !peers.has(p.peerId)) {
-                connectToPeer(p.peerId);
+              if (p.peerId !== selfPeerId && !peers.has(p.peerId) && !connectingPeers.has(p.peerId)) {
+                if (selfPeerId < p.peerId) {
+                  connectToPeer(p.peerId);
+                }
               }
             });
             break;
           }
 
           case 'peer-joined': {
-            if (msg.peer && msg.peer.peerId !== selfPeerId && !peers.has(msg.peer.peerId)) {
-              connectToPeer(msg.peer.peerId);
+            if (msg.peer && msg.peer.peerId !== selfPeerId && !peers.has(msg.peer.peerId) && !connectingPeers.has(msg.peer.peerId)) {
+              if (selfPeerId < msg.peer.peerId) {
+                connectToPeer(msg.peer.peerId);
+              }
             }
             break;
           }
